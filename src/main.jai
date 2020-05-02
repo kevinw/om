@@ -4,6 +4,10 @@ Debug :: #import "Debug";
 #load "types.jai";
 #load "host_sokol.jai";
 #load "api.jai";
+#load "shader.jai";
+#load "builtin_shaders.jai";
+#load "geometry.jai";
+
 
 example_rect :: () {
     win := window(title="A Rectangle");
@@ -17,6 +21,8 @@ main :: () {
     _init_colors();
     _init_blend_states();
 
-    example_rect();
-    host_main();
+    //example_rect();
+    //host_main();
+
+    run_shdc();
 }

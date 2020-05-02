@@ -12,10 +12,25 @@ _init_colors :: () {
 Shader_Value :: Sum_Type(union {
     vec3: Vector3;
     vec4: Vector4;
-    //buf: Buffer;
+    buf: Buffer;
     mat: Matrix4;
-    //img: Image;
+    img: Image;
 });
+
+
+Shader_Value_Entry :: struct {
+    name: string;
+    value: Shader_Value;
+}
+
+make_shader_value_entry :: (name: string, val: $T) -> Shader_Value_Entry {
+    entry: Shader_Value_Entry;
+    entry.name = name;
+    entry.value.set(*entry.value, val);
+    return entry;
+}
+
+sv :: make_shader_value_entry; // TODO: replace this with an anonymous struct thing?
 
 Action_Func :: #type (node: *Node);
 
@@ -43,6 +58,8 @@ Node :: struct {
 
 Use_Program :: struct {
     using node: Node;
+
+    shader: *Shader;
 }
 
 Rotate :: struct {
@@ -92,7 +109,7 @@ Image :: struct {
     data: []u8;
     width: u16;
     height: u16;
-    // format:  RGBA8
+    // format: RGBA8
     pool_id: u16;
 }
 
@@ -103,11 +120,6 @@ Sprite :: struct {
 
 Post_Process :: struct {
     using node: Node;
-}
-
-Shader_Value_Entry :: struct {
-    name: string;
-    value: Shader_Value;
 }
 
 Bind :: struct {
@@ -191,4 +203,21 @@ Mouse_Button :: enum s16 {
     Left;
     Right;
     Middle;
+}
+
+Shader :: struct {
+    vert: string;
+    frag: string;
+
+    // TODO: sokol specific stuff. it would be nice if this stuff
+    // was over in host_sokol or hidden somehow. or maybe just a
+    // subtype polymorphic struct would be enough.
+
+    shader: sg_shader;
+    desc: sg_shader_desc;
+    pipeline: sg_pipeline;
+    reflection_info: Reflection_Info;
+
+    shader_attr_desc: [16]sg_shader_attr_desc; // use type_of() on the sokol 
+    vertex_attr_desc: [16]sg_vertex_attr_desc;
 }

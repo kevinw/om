@@ -24,6 +24,11 @@ state: struct {
 
     native_buffer_pool: [150]Native_Pool_Entry(sg_buffer);
     native_image_pool: [150]Native_Pool_Entry(sg_image);
+
+    shader_cache: struct {
+        _color2d: *Shader;
+        _texture2d: *Shader;
+    };
 };
 
 Native_Pool_Entry :: struct(T: Type) {
@@ -34,6 +39,18 @@ Native_Pool_Entry :: struct(T: Type) {
 
 // TODO: these could just be [dynamic]
 
+num_elements :: (buffer: Buffer) -> int {
+    sz:int;
+
+    if buffer.type == {
+        case Buffer_Type.U16_Elems; sz = size_of(u16);
+        case Buffer_Type.U32_Elems; sz = size_of(u32);
+        case Buffer_Type.Vector2;   sz = size_of(Vector2);
+        case;           panic("unimplemented Buffer_Type for num_elements");
+    }
+
+    return buffer.data.count / sz; // TODO: assert that this is a whole number
+}
 
 sokol_blend_states: [5]sg_blend_state;
 _init_blend_states :: () {

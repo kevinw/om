@@ -10,14 +10,114 @@ window :: (title: string) -> *Window {
     return win;
 }
 
-bind :: (values: []Shader_Value_Entry) -> *Bind {
+delta_time :: () -> float { return state.delta_time; }
+
+set_hidden :: (using node: *Node, hidden: bool = true) -> *Node {
+    if hidden flags |= Node_Flags.Hidden;
+    else flags &= ~Node_Flags.Hidden;
+    return node;
+}
+
+set_paused :: (using node: *Node, paused: bool = true) -> *Node {
+    if paused flags |= Node_Flags.Hidden;
+    else flags &= ~Node_Flags.Hidden;
+    return node;
+}
+
+is_paused :: (using node: *Node) -> bool {
+    return 0 != cast(u32)(flags & Node_Flags.Hidden); // TODO why is this cast necessary
+}
+
+use_program :: (shd: *Shader) -> *Use_Program {
+    assert(shd != null);
+
+    use_program := new_node_with_tag(Use_Program, "use_program");
+    use_program.shader = shd;
+    return use_program;
+}
+
+chain :: (first_arg: *$T = null, args: ..*Node) -> *Node {
+    if first_arg == null
+        return group();
+
+    if args.count > 0 {
+        for i: 0..args.count - 1 {
+            node_to_add := args[i + 1];
+            assert(node_to_add != null, "chain() nodes can't be null");
+            array_add(*args[i].children, args[i + 1]);
+        }
+
+        array_add(*first_arg.children, args[0]);
+    }
+
+    return first_arg;
+}
+
+group :: () -> *Group {
+    return new_node_with_tag(Group, "group");
+}
+
+add_child :: (using parent_node: *Node, child: *Node) {
+    array_add(*children, child);
+}
+
+// rotate
+
+rotate :: (angle_radians: float) -> *Rotate {
+    rotate_node := new_node_with_tag(Rotate, "rotate");
+    rotate_node.axis = make_vector3(0, 0, 1);
+    rotate_node.angle = angle_radians;
+    return rotate_node;
+}
+
+set_angle :: (using rotate: *Rotate, angle_radians: float) -> *Rotate {
+    angle = angle_radians;
+    return rotate;
+}
+
+// scale
+
+scale :: (scale_vec: Vector3) -> *Scale {
+    scale_node := new_node_with_tag(Scale, "scale");
+    scale_node.scale = scale_vec;
+    return scale_node;
+}
+
+set_scale :: (using scale_node: *Scale, new_scale: Vector3) -> *Scale {
+    scale = new_scale;
+    return scale_node;
+}
+
+set_scale :: (using scale_node: *Scale, new_scale: float) -> *Scale {
+    set_scale(scale_node, make_vector3(new_scale, new_scale, new_scale));
+    return scale_node;
+}
+
+get_scale :: (using scale_node: *Scale) -> Vector3 {
+    return scale;
+}
+
+// translate
+
+translate :: (offset_vec: Vector3) -> *Translate {
+    translate_node := new_node_with_tag(Translate, "translate");
+    translate_node.offset = offset_vec;
+    return translate_node;
+}
+
+translate :: (x: float, y: float, z: float) -> *Translate {
+    return translate(make_vector3(x, y, z));
+}
+
+set_position :: (using translate_node: *Translate, position: Vector3) -> *Translate {
+    translate_node.offset = position;
+    return translate_node;
+}
+
+bind :: (values: ..Shader_Value_Entry) -> *Bind {
     bind_node := new_node_with_tag(Bind, "bind");
     array_add(*bind_node.values, ..values);
     return bind_node;
-}
-
-rect :: (x1: float, y1: float, x2: float, y2: float) -> *Rect {
-    return rect(x1, y1, x2, y2, WHITE);
 }
 
 _make_buffer :: (vec: []$V, type: Buffer_Type) -> Buffer {
@@ -59,14 +159,93 @@ next_free_native_image_id :: () -> u16 {
 }
 
 
+Vec2_Array :: (floats: ..float) -> Buffer {
+    return _make_buffer(floats, Buffer_Type.Vector2);
+}
+
 Vec2_Array :: (vec2s: ..Vector2) -> Buffer {
     return _make_buffer(vec2s, Buffer_Type.Vector2);
+}
+
+U16_Elem_Array :: (u16s: ..u16) -> Buffer {
+    return _make_buffer(u16s, Buffer_Type.U16_Elems);
+}
+
+U32_Elem_Array :: (u32s: ..u32) -> Buffer {
+    return _make_buffer(u32s, Buffer_Type.U32_Elems);
+}
+
+rect :: (x1: float, y1: float, x2: float, y2: float) -> *Rect {
+    return rect(x1, y1, x2, y2, WHITE);
 }
 
 rect :: (x1: float, y1: float, x2: float, y2: float, color: Vector4) -> *Rect {
     rect_node := new_node(Rect);
 
-    return rect_node;
+    rect_node.bind_node = bind(
+        sv("vert", Vec2_Array(x2, y2, x2, y1, x1, y2, x1, y1)),
+        sv("color", color));
+    
+    return cast(*Rect)chain(
+        rect_node,
+        use_program(shader_color2d()),
+        blend(Blend_Mode.Alpha),
+        rect_node.bind_node,
+        draw(Primitive.Triangles, rect_indices()),
+    );
+}
+
+set_coords :: (using rect: *Rect, x1: float, y1: float, x2: float, y2: float) -> *Rect {
+    assert(false, "TODO: implement");
+    return rect;
+}
+
+blend :: (blend_mode: Blend_Mode) -> *Blend {
+    blend_node := new_node_with_tag(Blend, "blend");
+    blend_node.blend_mode = blend_mode;
+    return blend_node;
+}
+
+set_blend_mode :: (using blend: *Blend, new_blend_mode: Blend_Mode) {
+    blend_mode = new_blend_mode;
+}
+
+set_tag :: (node: *Node, tag_name: string) -> *Node {
+    array_add(*node.tags, copy_string(tag_name));
+    return node;
+}
+
+shader :: (vert: string, frag: string) -> *Shader {
+    shd := new(Shader);
+
+    // Validate the source code, but don't actually link it yet.
+    ok, native_vert, native_frag := translate_glsl(vert, frag, shd.native);
+
+    if !ok {
+        Log.error();
+        Log.print("error compiling shader!");
+    } else {
+        shd.vert = native_vert;
+        shd.frag = native_frag;
+    }
+
+    return shd;
+}
+
+
+draw :: (primitive: Primitive = Primitive.Triangles, elements: Buffer) -> *Draw {
+    assert(elements.data.data == null ||
+        elements.type == Buffer_Type.U16_Elems || elements.type == Buffer_Type.U32_Elems,
+        tprint("index buffer was of unexpected type %", elements.type));
+
+    draw_node := new_node_with_tag(Draw, "draw");
+    draw_node.primitive = primitive;
+    if elements.data.count != 0
+        draw_node.num_elements = num_elements(elements);
+    else
+        draw_node.num_elements = -1;
+    draw_node.index_buffer = elements;
+    return draw_node;
 }
 
 #scope_file
