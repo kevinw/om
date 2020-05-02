@@ -1436,15 +1436,15 @@ sg_desc :: struct {
     gl_force_gles2: bool;
     /* Metal-specific */
     mtl_device: *void;
-    mtl_renderpass_descriptor_cb: () #c_call;
-    mtl_drawable_cb: () #c_call;
+    mtl_renderpass_descriptor_cb: () -> *void #c_call;
+    mtl_drawable_cb: () -> *void #c_call;
     mtl_global_uniform_buffer_size: s32;
     mtl_sampler_cache_size: s32;
     /* D3D11-specific */
     d3d11_device: *void;
     d3d11_device_context: *void;
-    d3d11_render_target_view_cb: () #c_call;
-    d3d11_depth_stencil_view_cb: () #c_call;
+    d3d11_render_target_view_cb: () -> *void #c_call;
+    d3d11_depth_stencil_view_cb: () -> *void #c_call;
     _end_canary: u32;
 }
 
