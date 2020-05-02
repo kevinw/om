@@ -1,5 +1,14 @@
 #load "Sum_Type.jai";
 
+WHITE: Vector4;
+
+_init_colors :: () {
+    WHITE.x = 1;
+    WHITE.y = 1;
+    WHITE.z = 1;
+    WHITE.w = 1;
+}
+
 Shader_Value :: Sum_Type(union {
     vec3: Vector3;
     vec4: Vector4;
@@ -165,6 +174,7 @@ Blend_Mode :: enum s16 {
     Subtract_Alpha;
     Multiply;
     Invert;
+    NUM; // TODO: just use the type info
 }
 
 Primitive :: enum s16 {

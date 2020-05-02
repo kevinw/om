@@ -64,6 +64,20 @@ Sum_Type :: struct (T: Type) {
         }
         print_to_builder(*builder, "    }\n");
 
+        // .try_get_ptr
+        print_to_builder(*builder, "    try_get_ptr :: inline (this: $T, $V: Type) -> *V {\n");
+        for info.members {
+            type_name := get_type_name(it.type);
+            print_to_builder(*builder, "        #if V == % {\n", type_name);
+            print_to_builder(*builder, "            if this.type == TagType._% {\n", type_name);
+            print_to_builder(*builder, "                return *this.values.%;\n", it.name);
+            print_to_builder(*builder, "            } else {\n");
+            print_to_builder(*builder, "                return null;\n");
+            print_to_builder(*builder, "            }\n");
+            print_to_builder(*builder, "        }\n");
+        }
+        print_to_builder(*builder, "    }\n");
+
         return builder_to_string(*builder);
     }
 }
