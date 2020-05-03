@@ -7,6 +7,7 @@ Debug :: #import "Debug";
 #load "shader.jai";
 #load "builtin_shaders.jai";
 #load "geometry.jai";
+#load "images.jai";
 
 
 example_rect :: () {
@@ -21,8 +22,6 @@ main :: () {
     _init_colors();
     _init_blend_states();
 
-    //example_rect();
-    //host_main();
-
-    run_shdc();
+    example_rect();
+    host_main();
 }

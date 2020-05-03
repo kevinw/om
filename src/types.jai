@@ -62,6 +62,8 @@ Use_Program :: struct {
     shader: *Shader;
 }
 
+Placeholder_Image_Type :: enum { WHITE; BLACK; NORMALS; }
+
 Rotate :: struct {
     using node: Node;
 

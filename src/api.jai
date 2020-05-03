@@ -41,7 +41,7 @@ chain :: (first_arg: *$T = null, args: ..*Node) -> *Node {
         return group();
 
     if args.count > 0 {
-        for i: 0..args.count - 1 {
+        for i: 0..args.count - 2 {
             node_to_add := args[i + 1];
             assert(node_to_add != null, "chain() nodes can't be null");
             array_add(*args[i].children, args[i + 1]);
@@ -219,11 +219,11 @@ shader :: (vert: string, frag: string) -> *Shader {
     shd := new(Shader);
 
     // Validate the source code, but don't actually link it yet.
-    ok, native_vert, native_frag := translate_glsl(vert, frag, shd.native);
+    ok, native_vert, native_frag := translate_glsl(vert, frag, shd);
 
     if !ok {
         Log.error();
-        Log.print("error compiling shader!");
+        Log.print("did not compile shader\n");
     } else {
         shd.vert = native_vert;
         shd.frag = native_frag;
