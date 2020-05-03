@@ -1,0 +1,148 @@
+Process\windows.jai:96
+
+        child_error_\builder: String_Builder;
+
+what is that backslash???
+
+-----
+Process\os_run_command
+
+the first comment should probably be "don't pass your command line as one big string,"
+this will fail
+
+-----
+
+make_shader_value_entry :: (name: string, val: $T) {
+    entry: Shader_Value_Entry;
+    entry.name = name;
+    entry.value.set(*entry.value, val);
+    return entry;
+}
+
+does not raise an error saying you're trying to return a value
+
+
+---------------
+
+
+    if elements.data.count != 0; // <<-- no warning for this stray semicolon-
+        draw_node.num_elements = num_elements(elements);
+    else // <<--- ... just an error later.
+
+
+---------
+
+shaders :: #load "builtin_shaders.jai";
+
+ Error: Declaration claims to be constant, but uses an expression that is not constant.
+
+--- 
+
+no slicing syntax?
+
+----
+
+error message isn't great:
+C:/src/om/src/geometry.jai:65,33: Error: Type mismatch: incompatible structs (wanted '*unknown*', given 'Buffer').
+
+    buf := Vec2_Array(..t);
+    cache.circle_verts[sides] = buf;
+
+for 
+
+    circle_verts, circle_indices: [..]struct {
+        sides: int;
+        buffer: Buffer;
+    };:
+
+
+------
+
+    circle_verts, circle_indices: [..]struct {
+        sides: int;
+      j  buffer: Buffer;
+    };
+
+    array_reserve(*circle_verts, circle_verts.count + 1);
+    circle_verts[circle_verts.count].sides = sides;
+    circle_verts[circle_verts.count].buffer = buf;
+    circle_verts.count += 1;
+
+
+this doesn't work:
+    entry: type_info(type_of(cached_pipelines)).element_type;
+
+
+-----
+
+    array.data[array.count] = item;  // Note, we don't have an ABC here.
+
+
+----
+
+In workspace #2 ("build"):
+C:/src/om/src/shader.jai:19,19: Warning: Not all control paths return a value.
+
+    translate_glsl :: (vert: string, frag: string, shader: *Shader) ->
+
+^ in Array.jai
+
+
+---------------
+
+
+why are my stacktraces not showing
+
+------
+
+copy_string is a bad name i keep writing as string_copy because everything else is namespaced like C functions
+---
+the formatStruct variants break the snake_case convention
+
+
+----
+is there a more succinct way to make something private
+#scope_file
+_verbose_mode: i8 = -1;
+
+---
+how to make this function
+
+make :: ($arr_type: $T, num_elems: int) -> T {
+    slice: T;
+    slice.data = alloc(size_of(T) * num_elems);
+    slice.count = num_elems;
+    return slice;
+}
+----
+005_strings.jai how to
+
+    // For heavier-duty tasks, we have a thing called String_Builder that provides an
+    // incremental, buffered way of building strings:
+
+    builder: String_Builder;
+    init_string_builder(*builder);
+
+
+doesn't deinit the string builder
+----
+
+no helpful coloring here:
+
+
+In workspace #2 ("build"):
+C:/src/om/src/host_sokol.jai:504,100: Error: Comma-separated expressions in an impermissible place.
+
+    if verbose_mode()
+        print("create % buffer of size % with sg id %\n", ifx index then "index" else "vertex", data.count, pool_entry.sg_obj.id);
+---
+
+
+#scope_export
+
+----
+fnctions i need
+
+println
+make
+empty constructors MyStruct {}
