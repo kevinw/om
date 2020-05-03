@@ -65,7 +65,6 @@ END, vert, frag);
     File_win.file_delete("my_program_vs.hlsl");
     File_win.file_delete("my_program_vs.hlsl.meta");
 
-
     ok, exit_code, stdout, stderr := os_run_command(..cmdline, capture_and_return_output = true);
     
     if ok && exit_code == 0 {
@@ -90,77 +89,125 @@ END, vert, frag);
 }
 
 parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
-    handler: Text_File_Handler;
-    handler.do_version_number = false;
+    print("parsing shdc meta: %\n", filename);
 
-    defer deinit(*handler);
+    Stage :: enum u8 { INVALID; VS; FS; }
 
-    start_file(*handler, "shader_meta", filename, "shader meta parsing");
-    if handler.failed {
+    read :: inline ($T: Type, s: *string) -> T {
+        assert(s.count >= size_of(T));
+        result := << cast(*T)s.data;
+        advance(s, size_of(T));
+        return result;
+    }
+
+    read_bytes :: inline (s: *string, num_bytes: int) -> string {
+        assert(s.count >= num_bytes);
+
+        new_str: string;
+        new_str.data = s.data;
+        new_str.count = num_bytes;
+        
+        advance(s, num_bytes);
+
+        return new_str;
+    }
+
+    read_string :: inline (s: *string) -> string {
+        return read_bytes(s, read(u16, s));
+    }
+
+    read_attr :: (s: *string, attr: *sg_shader_attr_desc) {
+        attr.name = to_c_string(read_string(s));
+        unused_slot := read(u16, s);
+        attr.sem_name = to_c_string(read_string(s));
+        attr.sem_index = read(u8, s);
+    }
+
+    read_uniform_block :: (s: *string, block: *sg_shader_uniform_block_desc) {
+        num_uniforms := read(u16, s);
+        for i: 0..num_uniforms-1 {
+            using *block.uniforms[i];
+            name = to_c_string(read_string(s));
+            type = cast(sg_uniform_type)(read(u8, s));
+            array_count = read(u16, s);
+            print("member % % %\n", to_string(name), type, array_count);
+            unused_offset := read(u16, s);
+        }
+    }
+
+    bytes, ok := File.read_entire_file(filename);
+    if !ok {
         Log.error();
-        Log.print("Could not open '%'\n", filename);
+        Log.print("could not read %", filename);
         return false;
     }
 
-    using Bindings_Type :: enum { Invalid; Inputs; Outputs; Uniform_Block; }
-    bindings_type: Bindings_Type;
+    buf := *bytes;
 
-    stage: sg_shader_stage;
-    entry: string;
-    uniform_desc: sg_shader_uniform_desc;
+    // header and version
+    assert(read_bytes(buf, 4) == "SHDC");
+    assert(read(u16, buf) == 1);
 
-    for line: handler {
-        print("LINE %\n", line);
-        idx, found := String.index_of_char(line, #char ":");
-        if !found {
-            error(handler, "expected a line to have a colon");
-            continue;
+    // shader stage
+    shader_stage := cast(Stage)read(u8, buf);
+    assert(shader_stage != Stage.INVALID);
+    assert(shader_stage == Stage.VS || shader_stage == Stage.FS);
+
+    // entry point
+    entry_point := read_string(buf);
+    print("entry point: %\n", entry_point);
+
+    // inputs
+    inputs: [..]sg_shader_attr_desc;
+    input_count := read(u16, buf);
+    print("num inputs: %\n", input_count);
+    if input_count > 0 {
+        array_resize(*inputs, input_count);
+        for i: 0..input_count-1
+            read_attr(buf, *inputs[i]);
+    }
+    
+    // outputs
+    outputs: [..]sg_shader_attr_desc;
+    output_count := read(u16, buf);
+    print("num outputs: %\n", output_count);
+    if output_count > 0 {
+        array_resize(*outputs, output_count);
+        for i: 0..output_count-1
+            read_attr(buf, *outputs[i]);
+    }
+    
+    // uniform blocks
+    blocks: [..]sg_shader_uniform_block_desc;
+    uniform_block_count := read(u16, buf);
+    print("num uniform blocks: %\n", uniform_block_count);
+    if uniform_block_count > 0 {
+        array_resize(*blocks, uniform_block_count);
+        for i: 0..uniform_block_count-1
+            read_uniform_block(buf, *blocks[i]);
+    }
+
+    // images
+    images: [..]sg_shader_image_desc;
+    image_count := read(u16, buf);
+    print("num images: %\n", image_count);
+    if image_count > 0 {
+        array_resize(*images, image_count);
+        for i: 0..image_count-1 {
+            images[i].name = to_c_string(read_string(buf));
+            unused_slot := read(u16, buf);
+            images[i].type = cast(sg_image_type)read(u8, buf);
+            unused_base_type := cast(sg_image_type)read(u8, buf);
         }
+    }
 
-        key := String.slice(line, 0, idx);
-        rhs := String.slice(line, idx + 1, line.count - idx - 1);
-        rhs = String.eat_spaces(rhs);
-
-        if key == {
-            case "stage";
-                if rhs == {
-                    case "FS"; stage = sg_shader_stage.FS;
-                    case "VS"; stage = sg_shader_stage.VS;
-                    case;
-                        error(handler, "Unknown shader stage: '%'\n", rhs);
-                        continue;
-                }
-            case "entry"; entry = rhs;
-            case "inputs"; bindings_type = Inputs;
-            case "outputs"; bindings_type = Outputs;
-            case "uniform block"; bindings_type = Uniform_Block;
-            case "member";
-
-                for str, i: String.split(rhs, ",") {
-                    if i == 0 {
-                        uniform_desc.name = str;
-                    } else {
-                        elems := String.split(str, ": ");
-
-                        if elems[0] == {
-                            case "type";
-                            case "array_count";
-                            case "offset";
-                        }
-                        
-
-
-                    }
-
-                }
-
-
-
-            case;
-                name := key;
-                print("TODO: parse '%' for % with name %\n", rhs, bindings_type, name);
-
+    if bytes.count > 0 {
+        print("error:\n");
+        for i: 0..bytes.count-1 {
+            print("% ", bytes[i]);
         }
+        print("\n");
+        panic("leftover bytes\n");
     }
 
     return true;
