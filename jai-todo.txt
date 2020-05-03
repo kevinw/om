@@ -146,3 +146,10 @@ fnctions i need
 println
 make
 empty constructors MyStruct {}
+
+----
+
+file_delete isn't exported as an os-agnostic thing
+
+    File_win :: #import "File/windows";
+    File_win.file_delete("my_program_fs.hlsl");

@@ -2,7 +2,9 @@ Builtin_Shaders :: struct { // TODO: #load should be allowed to be namespaced!?
 
 color2d_v :: #string END
     in vec2 vert;
-    uniform mat4 P, MV;
+    uniform vs_uniforms {
+        mat4 P, MV;
+    };
     void main() {
         gl_Position = P * MV * vec4(vert, 0.0, 1.0);
     }

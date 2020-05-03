@@ -1,5 +1,8 @@
 #import "Sokol_Gfx";
 #import "Process";
+#import "Text_File_Handler";
+String :: #import "String";
+
 File :: #import "File";
 
 Shader_Type :: enum { Vertex; Fragment; }
@@ -17,10 +20,12 @@ Reflection_Info :: struct {
     };
 }
 
+make_and_push_working_directory :: (dirname: string) -> {}
+
 translate_glsl :: (vert: string, frag: string, shader: *Shader) ->
     (bool, string, string)
 {
-    path_to_shdc :: "C:\\src\\fips-deploy\\sokol-tools\\win64-vstudio-release\\sokol-shdc.exe";
+    path_to_shdc :: "sokol-shdc.exe";
 
     contents := tprint(#string END
 @vs vs
@@ -39,37 +44,126 @@ END, vert, frag);
     set_working_directory("temp");
     defer set_working_directory(old_wd);
 
-    print_color("current working directory: %\n", get_working_directory(), color=FOREGROUND_BLUE);
-
     filename :: "temp.shd";
+
     if !File.write_entire_file(filename, contents) {
         Log.error();
         Log.print("Could not write to file %\n", filename);
         return false, "", "";
     }
 
-    cmdline := {:string: 
-        path_to_shdc,
+    cmdline := {:string: path_to_shdc,
         "--input", filename,
         "--slang", "hlsl5",
         "--format", "bare",
         "--output", "\"./\"",
     };
 
-    print("--------\n%\n-----------", cmdline);
+    File_win :: #import "File/windows";
+    File_win.file_delete("my_program_fs.hlsl");
+    File_win.file_delete("my_program_fs.hlsl.meta");
+    File_win.file_delete("my_program_vs.hlsl");
+    File_win.file_delete("my_program_vs.hlsl.meta");
 
-    ok, exit_code, stdout, stderr := os_run_command(
-        ..cmdline, capture_and_return_output = true);
+
+    ok, exit_code, stdout, stderr := os_run_command(..cmdline, capture_and_return_output = true);
     
-    print("****stdout*********\n%\n****stderr*******\n%\n", stdout, stderr);
-
     if ok && exit_code == 0 {
-        print("success!?\n");
+        native_vert, vert_ok := File.read_entire_file("my_program_vs.hlsl");
+        if !vert_ok return false, "", "";
+
+        if !parse_shdc_meta_file("my_program_vs.hlsl.meta", shader)
+            return false, "", "";
+
+        native_frag, frag_ok := File.read_entire_file("my_program_fs.hlsl");
+        if !frag_ok return false, "", "";
+
+        if !parse_shdc_meta_file("my_program_fs.hlsl.meta", shader)
+            return false, "", "";
+
+        return true, native_vert, native_frag;
     } else {
         print_color("OK: %, exit_code: %\n", ok, exit_code, color=FOREGROUND_RED);
     }
 
     return false, "", "";
+}
+
+parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
+    handler: Text_File_Handler;
+    handler.do_version_number = false;
+
+    defer deinit(*handler);
+
+    start_file(*handler, "shader_meta", filename, "shader meta parsing");
+    if handler.failed {
+        Log.error();
+        Log.print("Could not open '%'\n", filename);
+        return false;
+    }
+
+    using Bindings_Type :: enum { Invalid; Inputs; Outputs; Uniform_Block; }
+    bindings_type: Bindings_Type;
+
+    stage: sg_shader_stage;
+    entry: string;
+    uniform_desc: sg_shader_uniform_desc;
+
+    for line: handler {
+        print("LINE %\n", line);
+        idx, found := String.index_of_char(line, #char ":");
+        if !found {
+            error(handler, "expected a line to have a colon");
+            continue;
+        }
+
+        key := String.slice(line, 0, idx);
+        rhs := String.slice(line, idx + 1, line.count - idx - 1);
+        rhs = String.eat_spaces(rhs);
+
+        if key == {
+            case "stage";
+                if rhs == {
+                    case "FS"; stage = sg_shader_stage.FS;
+                    case "VS"; stage = sg_shader_stage.VS;
+                    case;
+                        error(handler, "Unknown shader stage: '%'\n", rhs);
+                        continue;
+                }
+            case "entry"; entry = rhs;
+            case "inputs"; bindings_type = Inputs;
+            case "outputs"; bindings_type = Outputs;
+            case "uniform block"; bindings_type = Uniform_Block;
+            case "member";
+
+                for str, i: String.split(rhs, ",") {
+                    if i == 0 {
+                        uniform_desc.name = str;
+                    } else {
+                        elems := String.split(str, ": ");
+
+                        if elems[0] == {
+                            case "type";
+                            case "array_count";
+                            case "offset";
+                        }
+                        
+
+
+                    }
+
+                }
+
+
+
+            case;
+                name := key;
+                print("TODO: parse '%' for % with name %\n", rhs, bindings_type, name);
+
+        }
+    }
+
+    return true;
 }
 
 // builtin shaders

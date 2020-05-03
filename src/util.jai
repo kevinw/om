@@ -1,4 +1,18 @@
 #import "Debug";
+#import "Text_File_Handler";
+
+for_expansion :: (handler: *Text_File_Handler, body: Code, pointer: bool, reverse: bool) #expand {
+    #assert(!pointer && !reverse);
+
+    while true {
+        line, found := consume_next_line(handler);
+        if !found break;
+
+        `it := line;
+        #insert body;
+    }
+}
+
 
 panic :: (msg: string, fmt_args: ..Any) {
     print(msg, ..fmt_args);
