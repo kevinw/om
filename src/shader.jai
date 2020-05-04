@@ -7,11 +7,25 @@ File :: #import "File";
 
 Shader_Type :: enum { Vertex; Fragment; }
 
+Shader :: struct {
+    vert, frag: string;
+
+    // TODO: sokol specific stuff. it would be nice if this stuff
+    // was over in host_sokol or hidden somehow. or maybe just a
+    // subtype polymorphic struct would be enough.
+
+    shader: sg_shader;
+    desc: sg_shader_desc;
+    pipeline: sg_pipeline;
+    reflection_info: Reflection_Info;
+
+    shader_attr_desc: [16]sg_shader_attr_desc; // TODO: use type_of() on the sokol thing instead of hard-coding 16 here.
+    vertex_attr_desc: [16]sg_vertex_attr_desc;
+}
+
 Reflection_Info :: struct {
-    input_locations: [..]struct {
-        name: string;
-        location: int;
-    };
+    inputs: [..]struct { name: string; location: int; };
+    outputs: [..]struct { name: string; location: int; };
 
     images: [..]struct {
         name: string;
@@ -19,8 +33,6 @@ Reflection_Info :: struct {
         binding: u16;
     };
 }
-
-make_and_push_working_directory :: (dirname: string) -> {}
 
 translate_glsl :: (vert: string, frag: string, shader: *Shader) ->
     (bool, string, string)
@@ -91,49 +103,12 @@ END, vert, frag);
 parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
     print("parsing shdc meta: %\n", filename);
 
-    Stage :: enum u8 { INVALID; VS; FS; }
-
-    read :: inline ($T: Type, s: *string) -> T {
-        assert(s.count >= size_of(T));
-        result := << cast(*T)s.data;
-        advance(s, size_of(T));
-        return result;
-    }
-
-    read_bytes :: inline (s: *string, num_bytes: int) -> string {
-        assert(s.count >= num_bytes);
-
-        new_str: string;
-        new_str.data = s.data;
-        new_str.count = num_bytes;
-        
-        advance(s, num_bytes);
-
-        return new_str;
-    }
-
+    // in our shdc binary format, strings are encoded as (u16-len, bytes)
     read_string :: inline (s: *string) -> string {
         return read_bytes(s, read(u16, s));
     }
 
-    read_attr :: (s: *string, attr: *sg_shader_attr_desc) {
-        attr.name = to_c_string(read_string(s));
-        unused_slot := read(u16, s);
-        attr.sem_name = to_c_string(read_string(s));
-        attr.sem_index = read(u8, s);
-    }
-
-    read_uniform_block :: (s: *string, block: *sg_shader_uniform_block_desc) {
-        num_uniforms := read(u16, s);
-        for i: 0..num_uniforms-1 {
-            using *block.uniforms[i];
-            name = to_c_string(read_string(s));
-            type = cast(sg_uniform_type)(read(u8, s));
-            array_count = read(u16, s);
-            print("member % % %\n", to_string(name), type, array_count);
-            unused_offset := read(u16, s);
-        }
-    }
+    Stage :: enum u8 { INVALID; VS; FS; }
 
     bytes, ok := File.read_entire_file(filename);
     if !ok {
@@ -154,43 +129,78 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
     assert(shader_stage == Stage.VS || shader_stage == Stage.FS);
 
     // entry point
-    entry_point := read_string(buf);
-    print("entry point: %\n", entry_point);
+    entry_name := to_c_string(read_string(buf)); // @Leak
+    stage_desc: *sg_shader_stage_desc;
+    // print("entry point: %\n", entry_point);
+    if shader_stage == {
+        case Stage.VS; stage_desc = *shader.desc.vs;
+        case Stage.FS; stage_desc = *shader.desc.fs;
+    }
+    stage_desc.entry = entry_name;
 
     // inputs
     inputs: [..]sg_shader_attr_desc;
     input_count := read(u16, buf);
-    print("num inputs: %\n", input_count);
+    // print("num inputs: %\n", input_count);
     if input_count > 0 {
         array_resize(*inputs, input_count);
-        for i: 0..input_count-1
-            read_attr(buf, *inputs[i]);
+        for i: 0..input_count-1 {
+            name := read_string(buf);
+            inputs[i].name = to_c_string(name);
+            location := read(u16, buf);
+            inputs[i].sem_name = to_c_string(read_string(buf));
+            inputs[i].sem_index = read(u8, buf);
+
+            // store name and location in the shader's reflection info
+            using shader.reflection_info;
+            array_resize(*inputs, inputs.count + 1);
+            inputs[inputs.count - 1].name     = copy_string(name);
+            inputs[inputs.count - 1].location = location;
+        }
     }
     
     // outputs
     outputs: [..]sg_shader_attr_desc;
     output_count := read(u16, buf);
-    print("num outputs: %\n", output_count);
+    // print("num outputs: %\n", output_count);
     if output_count > 0 {
         array_resize(*outputs, output_count);
-        for i: 0..output_count-1
-            read_attr(buf, *outputs[i]);
+        for i: 0..output_count-1 {
+            name := read_string(buf);
+            outputs[i].name = to_c_string(name);
+            location := read(u16, buf);
+            outputs[i].sem_name = to_c_string(read_string(buf));
+            outputs[i].sem_index = read(u8, buf);
+
+            using shader.reflection_info;
+            array_resize(*outputs, outputs.count + 1);
+            outputs[outputs.count - 1].name     = copy_string(name);
+            outputs[outputs.count - 1].location = location;
+        }
     }
     
     // uniform blocks
-    blocks: [..]sg_shader_uniform_block_desc;
     uniform_block_count := read(u16, buf);
-    print("num uniform blocks: %\n", uniform_block_count);
+    // print("num uniform blocks: %\n", uniform_block_count);
     if uniform_block_count > 0 {
-        array_resize(*blocks, uniform_block_count);
-        for i: 0..uniform_block_count-1
-            read_uniform_block(buf, *blocks[i]);
+        for i: 0..uniform_block_count-1 {
+            block := *stage_desc.uniform_blocks[i];
+            num_uniforms := read(u16, buf);
+            for j: 0..num_uniforms-1 {
+                block.uniforms[j].name = to_c_string(read_string(buf));
+                block.uniforms[j].type = cast(sg_uniform_type)(read(u8, buf));
+                block.uniforms[j].array_count = read(u16, buf);
+                print("member % % %\n", to_string(block.uniforms[j].name), block.uniforms[j].type, block.uniforms[j].array_count);
+                unused_offset := read(u16, buf);
+            }
+            compute_uniform_block_size(block);
+        }
     }
 
     // images
     images: [..]sg_shader_image_desc;
     image_count := read(u16, buf);
-    print("num images: %\n", image_count);
+    // print("num images: %\n", image_count);
     if image_count > 0 {
         array_resize(*images, image_count);
         for i: 0..image_count-1 {
@@ -203,14 +213,32 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
 
     if bytes.count > 0 {
         print("error:\n");
-        for i: 0..bytes.count-1 {
-            print("% ", bytes[i]);
-        }
+        for i: 0..bytes.count-1 print("% ", bytes[i]);
         print("\n");
         panic("leftover bytes\n");
     }
 
     return true;
+}
+
+compute_uniform_block_size :: (uniform_block: *sg_shader_uniform_block_desc) {
+    total_size:s32 = 0;
+    for uniform_block.uniforms {
+        using sg_uniform_type;
+        if it.type == INVALID break;
+        if it.type == {
+            case FLOAT;  total_size += size_of(float);
+            case FLOAT2; total_size += size_of(Vector2);
+            case FLOAT3; total_size += size_of(Vector3);
+            case FLOAT4; total_size += size_of(Vector4);
+            //case INT;    total_size += size_of(s32);
+            case MAT4;   total_size += size_of(Matrix4);
+            case; panic("unhandled uniform type %\n", it.type);
+        }
+    }
+
+    print("calculated uniorm block size %\n", total_size);
+    uniform_block.size = total_size;
 }
 
 // builtin shaders

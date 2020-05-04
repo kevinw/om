@@ -43,5 +43,27 @@ round_up :: (n: float) -> int {
     return cast(int)(n + 0.5);
 }
 
+// Tools for reading binary file formats.
+
+read :: inline ($T: Type, s: *string) -> T {
+    assert(s.count >= size_of(T));
+    result := << cast(*T)s.data;
+    advance(s, size_of(T));
+    return result;
+}
+
+read_bytes :: inline (s: *string, num_bytes: int) -> string {
+    assert(s.count >= num_bytes);
+
+    new_str: string;
+    new_str.data = s.data;
+    new_str.count = num_bytes;
+    
+    advance(s, num_bytes);
+
+    return new_str;
+}
+
+
 #scope_file
 _verbose_mode: s8 = -1;

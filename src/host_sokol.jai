@@ -369,7 +369,7 @@ render_draw_node :: (draw_node: *Draw) {
 
     {
         // bind vertex inputs
-        for * reflection_info.input_locations {
+        for * reflection_info.inputs {
             name, location_idx := it.name, it.location;
             val := get_bind_val_ptr(name, Buffer);
             if !val {

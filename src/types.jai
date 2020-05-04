@@ -206,20 +206,3 @@ Mouse_Button :: enum s16 {
     Right;
     Middle;
 }
-
-Shader :: struct {
-    vert: string;
-    frag: string;
-
-    // TODO: sokol specific stuff. it would be nice if this stuff
-    // was over in host_sokol or hidden somehow. or maybe just a
-    // subtype polymorphic struct would be enough.
-
-    shader: sg_shader;
-    desc: sg_shader_desc;
-    pipeline: sg_pipeline;
-    reflection_info: Reflection_Info;
-
-    shader_attr_desc: [16]sg_shader_attr_desc; // use type_of() on the sokol 
-    vertex_attr_desc: [16]sg_vertex_attr_desc;
-}

@@ -153,3 +153,12 @@ file_delete isn't exported as an os-agnostic thing
 
     File_win :: #import "File/windows";
     File_win.file_delete("my_program_fs.hlsl");
+
+----
+
+In workspace #2 ("build"):
+C:/Users/kevin/src/om/src/shader.jai:194,27: Error: This identifier is not a member of a fixed array.
+
+    num_uniforms := read(u16, buf);
+    for j: 0..num_uniforms-1 {
+        blocks[i].uniforms[j].name = to_c_string(read_string(buf));
