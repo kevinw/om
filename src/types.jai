@@ -89,7 +89,11 @@ Rect :: struct {
 }
 
 Buffer_Type :: enum s8 {
+    Invalid;
+    Float;
     Vector2;
+    Vector3;
+    Vector4;
     U16_Elems;
     U32_Elems;
 }

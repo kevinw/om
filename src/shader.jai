@@ -14,7 +14,7 @@ Shader :: struct {
     // was over in host_sokol or hidden somehow. or maybe just a
     // subtype polymorphic struct would be enough.
 
-    shader: sg_shader;
+    native_shader: sg_shader;
     desc: sg_shader_desc;
     pipeline: sg_pipeline;
     reflection_info: Reflection_Info;
@@ -101,7 +101,7 @@ END, vert, frag);
 }
 
 parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
-    print("parsing shdc meta: %\n", filename);
+    //print("parsing shdc meta: %\n", filename);
 
     // in our shdc binary format, strings are encoded as (u16-len, bytes)
     read_string :: inline (s: *string) -> string {
@@ -139,17 +139,15 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
     stage_desc.entry = entry_name;
 
     // inputs
-    inputs: [..]sg_shader_attr_desc;
     input_count := read(u16, buf);
     // print("num inputs: %\n", input_count);
     if input_count > 0 {
-        array_resize(*inputs, input_count);
         for i: 0..input_count-1 {
             name := read_string(buf);
-            inputs[i].name = to_c_string(name);
+            shader.desc.attrs[i].name = to_c_string(name);
             location := read(u16, buf);
-            inputs[i].sem_name = to_c_string(read_string(buf));
-            inputs[i].sem_index = read(u8, buf);
+            shader.desc.attrs[i].sem_name = to_c_string(read_string(buf));
+            shader.desc.attrs[i].sem_index = read(u8, buf);
 
             // store name and location in the shader's reflection info
             using shader.reflection_info;
@@ -190,7 +188,7 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
                 block.uniforms[j].name = to_c_string(read_string(buf));
                 block.uniforms[j].type = cast(sg_uniform_type)(read(u8, buf));
                 block.uniforms[j].array_count = read(u16, buf);
-                print("member % % %\n", to_string(block.uniforms[j].name), block.uniforms[j].type, block.uniforms[j].array_count);
+                //print("member % % %\n", to_string(block.uniforms[j].name), block.uniforms[j].type, block.uniforms[j].array_count);
                 unused_offset := read(u16, buf);
             }
             compute_uniform_block_size(block);
@@ -237,7 +235,9 @@ compute_uniform_block_size :: (uniform_block: *sg_shader_uniform_block_desc) {
         }
     }
 
-    print("calculated uniorm block size %\n", total_size);
+    //print("calculated uniform block size %\n", total_size);
+    if total_size == 0
+        print("warning: calculated uniform block size %\n", total_size);
     uniform_block.size = total_size;
 }
 

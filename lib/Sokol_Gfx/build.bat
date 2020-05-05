@@ -1,7 +1,7 @@
 @setlocal
 @echo off
 
-set CC=cl /nologo /O2 /I. /Z7 /c
+set CC=cl /nologo /Od /I. /Z7 /c
 set LD=lib /nologo
 set RM=del
 

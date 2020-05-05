@@ -805,7 +805,7 @@ sg_pass_action :: struct {
 sg_bindings :: struct {
     _start_canary: u32;
     vertex_buffers: [SG_MAX_SHADERSTAGE_BUFFERS]sg_buffer;
-    vertex_buffer_offsets: [SG_MAX_SHADERSTAGE_BUFFERS]int;
+    vertex_buffer_offsets: [SG_MAX_SHADERSTAGE_BUFFERS]s32;
     index_buffer: sg_buffer;
     index_buffer_offset: s32;
     vs_images: [SG_MAX_SHADERSTAGE_IMAGES]sg_image;
@@ -1531,3 +1531,11 @@ sg_fail_pass :: (pass_id: sg_pass) #foreign sg_lib;
 sg_setup_context :: () -> sg_context #foreign sg_lib;
 sg_activate_context :: (ctx_id: sg_context) #foreign sg_lib;
 sg_discard_context :: (ctx_id: sg_context) #foreign sg_lib;
+
+/* Debug functionality (not in sokol master) */
+sg_print_struct_sizes :: () #foreign sg_lib;
+
+sg_malloc_func :: #type (bytes: int) -> *void #c_call;
+sg_free_func :: #type (ptr: *void) #c_call;
+
+sg_set_debug_funcs :: (my_malloc: sg_malloc_func, my_free: sg_free_func) #foreign sg_lib;

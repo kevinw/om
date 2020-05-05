@@ -11842,4 +11842,10 @@ SOKOL_API_IMPL sg_pass_desc sg_query_pass_defaults(const sg_pass_desc* desc) {
 #pragma warning(pop)
 #endif
 
+SOKOL_API_IMPL void sg_print_struct_sizes() {
+    printf("%s: %lld\n", "sg_shader_desc", sizeof(sg_shader_desc));
+    printf("%s: %lld\n", "sg_bindings", sizeof(sg_bindings));
+    printf("%s: %lld\n", "sg_pipeline_desc", sizeof(sg_pipeline_desc));
+}
+
 #endif /* SOKOL_IMPL */

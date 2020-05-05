@@ -14,6 +14,7 @@ state: struct {
     delta_time: float;
     frame_count: u64;
 
+    // state stored while rendering
     current_program: *Use_Program;
     current_bind_values: [..]Shader_Value_Entry;
     current_blend: sg_blend_state;
@@ -65,7 +66,7 @@ apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shad
         byte_offset := 0;
         for uniform: block_desc.uniforms {
             if uniform.type == sg_uniform_type.INVALID break; // sokol's 'end of uniforms' marker
-            if uniform.array_count > 0 panic("TODO: impl array_count\n");
+            if uniform.array_count > 1 panic("TODO: impl array_count: % % \n", uniform.array_count, to_string(uniform.name));
 
             val := get_bind_val_ptr(to_string(uniform.name)); // TODO: @Speed - this is strlen everytime....doh
             if val != null {
@@ -76,6 +77,7 @@ apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shad
                     case _Vector4; memcpy(dst, val, size_of(Vector4));
                     case _Buffer; 
                         buf := val.try_get_ptr(val, Buffer);
+                        assert(buf != null, "Expected buffer");
                         memcpy(dst, buf.data.data, buf.data.count);
                     case _Matrix4; memcpy(dst, val, size_of(Matrix4));
                     case _Image;   print("warning: % is an image, not a uniform\n", uniform.name);
@@ -117,7 +119,7 @@ _ensure_image_created :: (img: *Image) -> sg_image {
     using pool_entry := *state.native_image_pool[img.pool_id];
     assert(occupied == true);
 
-    if sg_obj.id == 0 {
+    if sg_obj == 0 {
         assert(img.width > 0,  "image width must be positive non-zero");
         assert(img.height > 0, "image height must be positive non-zero");
 
@@ -135,7 +137,7 @@ _ensure_image_created :: (img: *Image) -> sg_image {
         sg_obj = sg_make_image(*desc);
 
         if verbose_mode()
-            print("created image of size % with sg id %\n", img.data.count, sg_obj.id);
+            print("created image of size % with sg id %\n", img.data.count, sg_obj);
     }
 
     return sg_obj;
@@ -313,15 +315,63 @@ get_or_make_cached_pipeline :: (pipeline_desc: sg_pipeline_desc) -> sg_pipeline 
             return it.pipeline;
     }
 
-    print("making pipeline %\n", pipeline_desc);
+    //print("making pipeline %\n", formatStruct(pipeline_desc, use_newlines_if_more_than_this_many_members=0));
+    //print("attrs: \n");
+    //for pipeline_desc.layout.attrs {
+        //print("  %\n", it);
+    //}
+
     pipeline := sg_make_pipeline(*pipeline_desc);
 
-    array_reserve(*cached_pipelines, cached_pipelines.count + 1);
-    cached_pipelines[cached_pipelines.count].pipeline = pipeline;
-    cached_pipelines[cached_pipelines.count].desc = pipeline_desc;
-    cached_pipelines.count += 1;
+    array_resize(*cached_pipelines, cached_pipelines.count + 1);
+    cached_pipelines[cached_pipelines.count - 1].pipeline = pipeline;
+    cached_pipelines[cached_pipelines.count - 1].desc = pipeline_desc;
 
     return pipeline;
+}
+
+shader_is_valid :: (shader: sg_shader) -> bool {
+    return shader != 0;
+}
+
+_ensure_shader_loaded :: (shader: *Shader) {
+    assert(shader != null);
+
+    if shader_is_valid(shader.native_shader) return;
+
+    // TODO: @Speed just allocate the original strings with null bytes!
+    shader.desc.vs.source = to_c_string(shader.vert); // @Leak. use temp allocator
+    shader.desc.fs.source = to_c_string(shader.frag);
+
+    /*
+    print("vs.images\n");
+    for shader.desc.vs.images
+        print("   %\n", it);
+    print("fs.images\n");
+    for shader.desc.fs.images
+        print("   %\n", it);
+    */
+
+    shader.native_shader = sg_make_shader(*shader.desc);
+
+    state := sg_query_shader_state(shader.native_shader);
+    if state != sg_resource_state.VALID {
+        Log.warning();
+        Log.print("shader creation failed %\n", state);
+    }
+}
+
+buffer_type_to_sg_vertex_format :: (buf_type: Buffer_Type) -> sg_vertex_format {
+    if buf_type == {
+        case Buffer_Type.Float;   return .FLOAT;
+        case Buffer_Type.Vector2; return .FLOAT2;
+        case Buffer_Type.Vector3; return .FLOAT3;
+        case Buffer_Type.Vector4; return .FLOAT4;
+        case;
+            panic("TODO: implement buffer_type_to_sg_vertex_format for '%'\n", buf_type);
+    }
+
+    return .INVALID;
 }
 
 render_draw_node :: (draw_node: *Draw) {
@@ -332,14 +382,14 @@ render_draw_node :: (draw_node: *Draw) {
     }
 
     has_index_buffer := false;
+    index_type: sg_index_type;
     {
         using state.current_program.shader;
 
-        index_type: sg_index_type;
         if draw_node.index_buffer.data.count != 0 {
             if draw_node.index_buffer.type == {
-                case Buffer_Type.U16_Elems; index_type = sg_index_type.UINT16;
-                case Buffer_Type.U32_Elems; index_type = sg_index_type.UINT32;
+                case Buffer_Type.U16_Elems; index_type = .UINT16;
+                case Buffer_Type.U32_Elems; index_type = .UINT32;
                 case Buffer_Type.Vector2;
                     panic("unimplemented index buffer type %\n", draw_node.index_buffer.type);
                     index_type = sg_index_type.UINT16;
@@ -347,19 +397,9 @@ render_draw_node :: (draw_node: *Draw) {
         }
     }
 
-    pip_desc: sg_pipeline_desc;
-    cached_pipeline := get_or_make_cached_pipeline(pip_desc);
+    _ensure_shader_loaded(state.current_program.shader);
 
     using state.current_program.shader;
-
-    // set uniforms
-    {
-        // TODO: multiple uniform blocks
-        // TODO: think about how to cache whether a set of uniforms is
-        //       "dirty" or not.
-        apply_uniforms(sg_shader_stage.FS, 0, desc.fs.uniform_blocks[0]);
-        apply_uniforms(sg_shader_stage.VS, 0, desc.vs.uniform_blocks[0]);
-    }
 
     current_bindings: sg_bindings;
     num_elems: int = -1;
@@ -367,21 +407,46 @@ render_draw_node :: (draw_node: *Draw) {
         num_elems = draw_node.num_elements; // TODO: don't store on the node
     }
 
+    pip_desc: sg_pipeline_desc;
+    {
+        pip_desc.shader = native_shader;
+        pip_desc.primitive_type = cast(sg_primitive_type)draw_node.primitive;
+        pip_desc.label = "generated-pipeline"; // TODO: use shader name!?
+        //print("in pipeline construction, has_index_buffer: %, index_type: %\n", has_index_buffer, index_type);
+        if has_index_buffer
+            pip_desc.index_type = index_type;
+        memset(*pip_desc.depth_stencil, 0, size_of(type_of(pip_desc.depth_stencil)));
+        pip_desc.blend = state.current_blend;
+    }
+
     {
         // bind vertex inputs
+        vert_buf_count := 0;
         for * reflection_info.inputs {
             name, location_idx := it.name, it.location;
             val := get_bind_val_ptr(name, Buffer);
+            //print("looking up buffer %: %\n", name, val);
             if !val {
-                buf, buf_ok := as_sg_buffer(val);
-                if buf_ok {
-                    current_bindings.vertex_buffers[location_idx] = buf;
-                    if location_idx == 0 && !has_index_buffer {
-                        num_elems = num_elements(<<val) / num_elems_per_primitive(draw_node.primitive);
-                    }
-                    continue;
-                }
+                print("warning: expected a shader value with name '%' for an input vertex buffer\n", name);
+                continue;
             }
+            buf, buf_ok := as_sg_buffer(val);
+            if !buf_ok continue;
+
+            current_bindings.vertex_buffers[location_idx] = buf;
+            if location_idx == 0 && !has_index_buffer {
+                num_elems = num_elements(<<val) / num_elems_per_primitive(draw_node.primitive);
+            }
+
+            // here we describe the position and type of our input vertex buffers
+            // for the pipeline.
+            pip_desc.layout.attrs[vert_buf_count].buffer_index = cast(s32)location_idx;
+            pip_desc.layout.attrs[vert_buf_count].offset = 0;
+            pip_desc.layout.attrs[vert_buf_count].format = buffer_type_to_sg_vertex_format(val.type);
+            vert_buf_count += 1;
+            if vert_buf_count >= SG_MAX_VERTEX_ATTRIBUTES panic("too many vertex buffers");
+
+            continue;
         }
 
         // bind images
@@ -391,11 +456,38 @@ render_draw_node :: (draw_node: *Draw) {
             if it.shader_type == {
                 case Shader_Type.Vertex;   current_bindings.vs_images[it.binding] = sg_img;
                 case Shader_Type.Fragment; current_bindings.fs_images[it.binding] = sg_img;
+                case; panic("unknown shader type %\n", it.shader_type);
             }
         }
     }
 
+    // Get or create a cached pipeline, and apply it.
+    cached_pipeline := get_or_make_cached_pipeline(pip_desc);
+    sg_apply_pipeline(cached_pipeline);
 
+    // Set uniforms
+    {
+        // TODO: multiple uniform blocks
+        // TODO: think about how to cache whether a set of uniforms is
+        //       "dirty" or not.
+        apply_uniforms(sg_shader_stage.FS, 0, desc.fs.uniform_blocks[0]);
+        apply_uniforms(sg_shader_stage.VS, 0, desc.vs.uniform_blocks[0]);
+    }
+
+    if has_index_buffer && draw_node.index_buffer.pool_id != 0 {
+        current_bindings.index_buffer = _ensure_buffer_created(buf=*draw_node.index_buffer, index=true);
+    }
+
+    assert(num_elems > 0);
+    //print("applying bindings: %\n", current_bindings);
+    //print("vs_images:\n");
+    //for current_bindings.vs_images print("   %", it);
+    //print("\n");
+    //print("fs_images:\n");
+    //for current_bindings.fs_images print("   %", it);
+    //print("\n");
+    sg_apply_bindings(*current_bindings);
+    sg_draw(0, cast(s32)num_elems, 1);
 }
 
 get_current_bind_sg_image :: (name: string) -> (sg_image, bool) {
@@ -483,7 +575,7 @@ _ensure_buffer_created :: (using buf: *Buffer, index: bool = false) -> sg_buffer
     pool_entry := *state.native_buffer_pool[pool_id];
     assert(pool_entry.occupied == true);
 
-    if pool_entry.sg_obj.id == 0 {
+    if pool_entry.sg_obj == 0 {
         if verbose_mode() print("creating buffer for pool_id %\n", pool_id);
         buf_desc: sg_buffer_desc;
         {
@@ -501,7 +593,7 @@ _ensure_buffer_created :: (using buf: *Buffer, index: bool = false) -> sg_buffer
         }
 
         if verbose_mode() {
-            print("create % buffer of size % with sg id %\n", (ifx index then "index" else "vertex"), data.count, pool_entry.sg_obj.id);
+            print("create % buffer of size % with sg id %\n", (ifx index then "index" else "vertex"), data.count, pool_entry.sg_obj);
         }
     }
 

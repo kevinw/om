@@ -22,4 +22,38 @@ void set_assert_func(assert_failed_func func) {
         abort(); \
     }
 
+//
+// debug malloc/free
+//
+#define SOKOL_MALLOC my_debug_MALLOC
+#define SOKOL_FREE   my_debug_FREE
+
+#include <stdlib.h>
+
+typedef void* (*malloc_func)(size_t bytes);
+typedef void (*free_func)();
+
+static malloc_func _my_sg_MALLOC = 0;
+static free_func _my_sg_FREE = 0;
+
+void sg_set_debug_funcs(malloc_func my_malloc, free_func my_free) {
+    _my_sg_MALLOC = my_malloc;
+    _my_sg_FREE = my_free;
+}
+
+static void* my_debug_MALLOC(size_t bytes) {
+    if (_my_sg_MALLOC != 0)
+        return _my_sg_MALLOC(bytes);
+    else
+        return malloc(bytes);
+}
+
+static void my_debug_FREE(void* ptr) {
+    if (_my_sg_FREE != 0)
+        _my_sg_FREE(ptr);
+    else
+        free(ptr);
+}
+
+
 #include "sokol_gfx.h"

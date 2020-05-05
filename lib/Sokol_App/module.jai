@@ -1,6 +1,7 @@
 #if OS_WINDOWS {
     #foreign_system_library "d3d11";
     #foreign_system_library "dxguid";
+    #foreign_system_library "user32";
     sapp_lib :: #foreign_library,no_dll "win/sokol_app_d3d11";
 }
 
@@ -309,3 +310,8 @@ sapp_win32_get_hwnd :: () -> *void #foreign sapp_lib;
 
 /* Android: get native activity handle */
 sapp_android_get_native_activity :: () -> *void #foreign sapp_lib;
+
+sapp_calloc_func :: #type (num: int, size: int) -> *void #c_call;
+sapp_free_func :: #type (ptr: *void) #c_call;
+
+sapp_set_debug_funcs :: (my_calloc: sapp_calloc_func, my_free: sapp_free_func) #foreign sapp_lib;

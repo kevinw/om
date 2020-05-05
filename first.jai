@@ -8,15 +8,13 @@ build :: () {
     opts.output_type = Build_Output_Type.NO_OUTPUT;
     set_build_options(opts);
 
-    opts.output_type = Build_Output_Type.EXECUTABLE;
-
     w := compiler_create_workspace("build");
-
     {
         compiler_begin_intercept(w);
         defer compiler_end_intercept(w);
 
         array_add(*opts.modules_search_path_array, "lib");
+        opts.output_type = Build_Output_Type.EXECUTABLE;
         set_build_options(opts, w);
         add_build_file("src/main.jai", w);
 
