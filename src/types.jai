@@ -200,7 +200,6 @@ Primitive :: enum s16 {
     Points;
     Lines;
     Line_Strip;
-    Line_Loop;
     Triangles;
     Triangle_Strip;
 }

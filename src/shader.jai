@@ -14,6 +14,7 @@ Shader :: struct {
     // was over in host_sokol or hidden somehow. or maybe just a
     // subtype polymorphic struct would be enough.
 
+
     native_shader: sg_shader;
     desc: sg_shader_desc;
     pipeline: sg_pipeline;
@@ -78,6 +79,13 @@ END, vert, frag);
     File_win.file_delete("my_program_vs.hlsl.meta");
 
     ok, exit_code, stdout, stderr := os_run_command(..cmdline, capture_and_return_output = true);
+
+    if exit_code != 0 {
+        Log.error();
+        Log.print("sokol-shdc returned an error (%)\n", exit_code);
+        Log.print("%\n%\n", stdout, stderr);
+        return false, "", "";
+    }
     
     if ok && exit_code == 0 {
         native_vert, vert_ok := File.read_entire_file("my_program_vs.hlsl");
@@ -91,10 +99,10 @@ END, vert, frag);
 
         if !parse_shdc_meta_file("my_program_fs.hlsl.meta", shader)
             return false, "", "";
-
+        
         return true, native_vert, native_frag;
     } else {
-        print_color("OK: %, exit_code: %\n", ok, exit_code, color=FOREGROUND_RED);
+        print("OK: %, exit_code: %\n", ok, exit_code);
     }
 
     return false, "", "";

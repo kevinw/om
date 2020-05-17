@@ -10,21 +10,30 @@ GWP :: #import "gwpasan";
 #load "geometry.jai";
 #load "images.jai";
 
-
 example_rect :: () {
     win := window(title="A Rectangle");
-    win.scene = rect(-50, -50, 50, 50, WHITE);
+    x1 := -50.0; y1 := -50.0;
+    x2 := 50.0;  y2 := 50.0;
+    win.scene = chain(
+        use_program(shader_color2d()),
+        bind(
+            sv("vert", Vec2_Array(x2, y2, x2, y1, x1, y2, x1, y1)),
+            sv("color", WHITE)),
+        draw(.Triangles, rect_indices()),
+    );
 }
+
+_c_context: *Context;
 
 main :: () {
     Debug.init();
     GWP.init();
     context.allocator = GWP.allocator;
 
+    _c_context = *context;
+
     debug_calloc :: (num: int, size: int) -> *void #c_call {
-        ctx: Context;
-        ctx.allocator = GWP.allocator;
-        push_context ctx {
+        push_context << _c_context {
             ptr := alloc(num * size);
             memset(ptr, 0, num * size);
             return ptr;
@@ -32,23 +41,25 @@ main :: () {
     }
 
     debug_malloc :: (bytes: int) -> *void #c_call {
-        ctx: Context;
-        ctx.allocator = GWP.allocator;
-        push_context ctx {
+        push_context << _c_context {
             return alloc(bytes);
         }
     }
 
     debug_free :: (ptr: *void) #c_call {
-        ctx: Context;
-        ctx.allocator = GWP.allocator;
-        push_context ctx {
+        push_context << _c_context {
             free(ptr);
         }
     }
 
+    debug_assert :: (expr: *u8, filename: *u8, line_number: s32) #c_call {
+        push_context << _c_context {
+            assert(false, tprint("expression: '%' at %:%", to_string(expr), to_string(filename), line_number));
+        }
+    }
+
     sapp_set_debug_funcs(debug_calloc, debug_free);
-    sg_set_debug_funcs(debug_malloc, debug_free);
+    sg_set_debug_funcs(debug_malloc, debug_free, debug_assert);
 
     /*
     sg_print_struct_sizes();

@@ -1537,5 +1537,6 @@ sg_print_struct_sizes :: () #foreign sg_lib;
 
 sg_malloc_func :: #type (bytes: int) -> *void #c_call;
 sg_free_func :: #type (ptr: *void) #c_call;
+sg_assert_func :: #type (expr: *u8, filename: *u8, line_number: s32) #c_call;
 
-sg_set_debug_funcs :: (my_malloc: sg_malloc_func, my_free: sg_free_func) #foreign sg_lib;
+sg_set_debug_funcs :: (my_malloc: sg_malloc_func, my_free: sg_free_func, sg_assert_func) #foreign sg_lib;

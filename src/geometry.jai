@@ -17,8 +17,10 @@ cache: struct { // TODO: put this in the global "state" struct?
 rect_indices :: () -> Buffer {
     using cache;
 
-    if rect_indices.data.count == 0
+    if rect_indices.data.count == 0 {
         rect_indices = U16_Elem_Array(0, 1, 2, 1, 2, 3); // TODO: one of these tris may be backwards, cull-wise
+    }
+    assert(num_elements(rect_indices) == 6);
 
     return rect_indices;
 }

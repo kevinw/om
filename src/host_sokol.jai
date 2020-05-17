@@ -53,7 +53,10 @@ _make_image :: (w: u16, h: u16, _data: []u8, clone_data := true) -> Image {
 }
 
 apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shader_uniform_block_desc) {
-    if block_desc.size == 0 return;
+    if block_desc.size == 0 {
+        print("no uniforms for %\n", shader_stage);
+        return;
+    }
 
     using state.current_program.shader;
 
@@ -68,18 +71,42 @@ apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shad
             if uniform.type == sg_uniform_type.INVALID break; // sokol's 'end of uniforms' marker
             if uniform.array_count > 1 panic("TODO: impl array_count: % % \n", uniform.array_count, to_string(uniform.name));
 
-            val := get_bind_val_ptr(to_string(uniform.name)); // TODO: @Speed - this is strlen everytime....doh
+            uniform_name_str := to_string(uniform.name);
+
+            val := get_bind_val_ptr(uniform_name_str); // TODO: @Speed - this is strlen everytime....doh
             if val != null {
                 dst := *uniform_bytes[byte_offset];
                 using val.TagType;
                 if val.type == {
-                    case _Vector3; memcpy(dst, val, size_of(Vector3));
-                    case _Vector4; memcpy(dst, val, size_of(Vector4));
+                    case _Vector3;
+                        memcpy(dst, val, size_of(Vector3));
+
+                        result := cast(*Vector3)dst;
+                        assert(!isnan(result.x));
+                        assert(!isnan(result.y));
+                        assert(!isnan(result.z));
+
+                    case _Vector4;
+                        memcpy(dst, val, size_of(Vector4));
+
+                        result := cast(*Vector4)dst;
+                        assert(!isnan(result.x));
+                        assert(!isnan(result.y));
+                        assert(!isnan(result.z));
+                        assert(!isnan(result.w));
+
                     case _Buffer; 
                         buf := val.try_get_ptr(val, Buffer);
                         assert(buf != null, "Expected buffer");
                         memcpy(dst, buf.data.data, buf.data.count);
-                    case _Matrix4; memcpy(dst, val, size_of(Matrix4));
+                    case _Matrix4;
+
+                        memcpy(dst, val, size_of(Matrix4));
+
+                        result := cast(*Matrix4)dst;
+                        for it, idx: result.floats
+                            assert(!isnan(it), tprint("elem % of matrix % is NaN!", idx, uniform_name_str));
+
                     case _Image;   print("warning: % is an image, not a uniform\n", uniform.name);
                 }
             }
@@ -119,7 +146,7 @@ _ensure_image_created :: (img: *Image) -> sg_image {
     using pool_entry := *state.native_image_pool[img.pool_id];
     assert(occupied == true);
 
-    if sg_obj == 0 {
+    if sg_obj.id == 0 {
         assert(img.width > 0,  "image width must be positive non-zero");
         assert(img.height > 0, "image height must be positive non-zero");
 
@@ -281,6 +308,7 @@ render_node :: (node_base: *Node) {
         case Use_Program;
             old_program := state.current_program;
             state.current_program = cast(*Use_Program)node_base;
+            assert(state.current_program.shader != null);
             defer state.current_program = old_program;
             
             render_children(node_base);
@@ -318,6 +346,7 @@ get_or_make_cached_pipeline :: (pipeline_desc: sg_pipeline_desc) -> sg_pipeline 
     //print("making pipeline %\n", formatStruct(pipeline_desc, use_newlines_if_more_than_this_many_members=0));
     //print("attrs: \n");
     //for pipeline_desc.layout.attrs {
+        //if it.format == .INVALID break;
         //print("  %\n", it);
     //}
 
@@ -331,17 +360,55 @@ get_or_make_cached_pipeline :: (pipeline_desc: sg_pipeline_desc) -> sg_pipeline 
 }
 
 shader_is_valid :: (shader: sg_shader) -> bool {
-    return shader != 0;
+    return shader.id != 0;
 }
 
-_ensure_shader_loaded :: (shader: *Shader) {
+strip_line_directives :: (s: string) -> string {
+    builder: String_Builder;
+    init_string_builder(*builder);
+    defer free_buffers(*builder);
+    for line: String.split(s, "\n") {
+        if String.begins_with(line, "#line ") continue;
+        print_to_builder(*builder, "%\n", line);
+    }
+    return builder_to_string(*builder);
+}
+
+assert_no_null_bytes :: (s: string) {
+    i := 0;
+    while i < s.count {
+        ch := s.data + i;
+        assert(<<ch != #char "\0");
+        i += 1;
+    }
+}
+
+_ensure_shader_loaded :: (shader: *Shader) -> s32 {
     assert(shader != null);
 
-    if shader_is_valid(shader.native_shader) return;
+
+    if shader_is_valid(shader.native_shader) {
+        // already loaded this shade.r
+        return 0xD0D0CACA;
+    }
 
     // TODO: @Speed just allocate the original strings with null bytes!
-    shader.desc.vs.source = to_c_string(shader.vert); // @Leak. use temp allocator
-    shader.desc.fs.source = to_c_string(shader.frag);
+    vert_shader_no_lines := strip_line_directives(shader.vert);
+    frag_shader_no_lines := strip_line_directives(shader.frag);
+
+    assert_no_null_bytes(vert_shader_no_lines);
+    assert_no_null_bytes(frag_shader_no_lines);
+
+    /*
+    print("~~~~VERT\n");
+    print(vert_shader_no_lines);
+    print("~~~~~~~\n");
+    print("~~~~FRAG\n");
+    print(frag_shader_no_lines);
+    */
+
+    shader.desc.vs.source = to_c_string(vert_shader_no_lines); // @Leak. use temp allocator
+    shader.desc.fs.source = to_c_string(frag_shader_no_lines);
 
     /*
     print("vs.images\n");
@@ -352,13 +419,19 @@ _ensure_shader_loaded :: (shader: *Shader) {
         print("   %\n", it);
     */
 
+    assert(shader.native_shader.id == 0);
+    print("Before: %\n", shader.native_shader.id);
     shader.native_shader = sg_make_shader(*shader.desc);
+    print("After: %\n", shader.native_shader.id);
+    assert(shader.native_shader.id != 0);
 
     state := sg_query_shader_state(shader.native_shader);
     if state != sg_resource_state.VALID {
         Log.warning();
         Log.print("shader creation failed %\n", state);
     }
+
+    return 0xD0D0CACA;
 }
 
 buffer_type_to_sg_vertex_format :: (buf_type: Buffer_Type) -> sg_vertex_format {
@@ -387,18 +460,19 @@ render_draw_node :: (draw_node: *Draw) {
         using state.current_program.shader;
 
         if draw_node.index_buffer.data.count != 0 {
+            has_index_buffer = true;
             if draw_node.index_buffer.type == {
-                case Buffer_Type.U16_Elems; index_type = .UINT16;
-                case Buffer_Type.U32_Elems; index_type = .UINT32;
-                case Buffer_Type.Vector2;
+                case .U16_Elems; index_type = .UINT16;
+                case .U32_Elems; index_type = .UINT32;
+                case .Vector2;
                     panic("unimplemented index buffer type %\n", draw_node.index_buffer.type);
                     index_type = sg_index_type.UINT16;
             }
         }
     }
-
-    _ensure_shader_loaded(state.current_program.shader);
-
+    assert(state.current_program != null && state.current_program.shader != null);
+    debug_res := _ensure_shader_loaded(state.current_program.shader);
+    assert(debug_res == 0xD0D0CACA);
     using state.current_program.shader;
 
     current_bindings: sg_bindings;
@@ -434,13 +508,18 @@ render_draw_node :: (draw_node: *Draw) {
             if !buf_ok continue;
 
             current_bindings.vertex_buffers[location_idx] = buf;
+            //print("binding vert buffer with location % to %\n", location_idx, val.data.data);
             if location_idx == 0 && !has_index_buffer {
-                num_elems = num_elements(<<val) / num_elems_per_primitive(draw_node.primitive);
+                elements_in_index_buffer := num_elements(<<val);
+                elems_per_prim := num_elems_per_primitive(draw_node.primitive);
+                print("elements in index buffer: %, elems_per_prim: % %", elements_in_index_buffer, elems_per_prim, draw_node.primitive);
+                num_elems = elements_in_index_buffer / elems_per_prim;
             }
 
             // here we describe the position and type of our input vertex buffers
             // for the pipeline.
             pip_desc.layout.attrs[vert_buf_count].buffer_index = cast(s32)location_idx;
+            //print("Vert buffer #% is buffer location %\n", location_idx);
             pip_desc.layout.attrs[vert_buf_count].offset = 0;
             pip_desc.layout.attrs[vert_buf_count].format = buffer_type_to_sg_vertex_format(val.type);
             vert_buf_count += 1;
@@ -557,7 +636,10 @@ init_cb :: () {
 
         p: Shader_Value_Entry;
         p.name = "P";
-        p.value.set(*p.value, get_win_projection());
+
+        proj_mat := get_win_projection();
+        for proj_mat.floats assert(!isnan(it));
+        p.value.set(*p.value, proj_mat);
         
         array_add(*state.current_bind_values, mv, p);
     }
@@ -565,7 +647,9 @@ init_cb :: () {
 }
 
 get_win_projection :: () -> Matrix4 {
-    w2, h2 := cast(float)(state.window.width / 2), cast(float)(state.window.height / 2);
+    assert(state.window.width > 0 && state.window.height > 0);
+    w, h := cast(float)state.window.width, cast(float)state.window.height;
+    w2, h2 := w/2, h/2;
     return orthographic_projection_matrix(-w2, w2, -h2, h2, -10, 10); 
 }
 
@@ -575,21 +659,32 @@ _ensure_buffer_created :: (using buf: *Buffer, index: bool = false) -> sg_buffer
     pool_entry := *state.native_buffer_pool[pool_id];
     assert(pool_entry.occupied == true);
 
-    if pool_entry.sg_obj == 0 {
+    if pool_entry.sg_obj.id == 0 {
         if verbose_mode() print("creating buffer for pool_id %\n", pool_id);
         buf_desc: sg_buffer_desc;
+
+        buffer_content: *void = null;
+        if pool_entry.usage == Resource_Usage.Immutable {
+            buffer_content = data.data;
+            print("buffer content: ");
+            for data
+                print("%02x ", it);
+            print("\n");
+        }
+
         {
             using buf_desc;
             type = ifx index then sg_buffer_type.INDEXBUFFER else sg_buffer_type.VERTEXBUFFER;
             size = cast(s32)data.count;
             usage = _get_sg_usage(pool_entry.usage);
-            content = ifx pool_entry.usage == Resource_Usage.Immutable then *data[0] else null;
+            content = buffer_content;
             label = "generated-buffer"; // TODO: better names would be nice
+            if verbose_mode() print("%", buf_desc);
         }
         pool_entry.sg_obj = sg_make_buffer(*buf_desc);
 
         if pool_entry.usage != Resource_Usage.Immutable && data.count != 0 {
-            sg_update_buffer(pool_entry.sg_obj, *data[0], cast(s32)data.count);
+            sg_update_buffer(pool_entry.sg_obj, data.data, cast(s32)data.count);
         }
 
         if verbose_mode() {
@@ -689,8 +784,8 @@ host_main :: () {
         cleanup_userdata_cb = (userdata: *void) #c_call {
             push_context <<(cast(*Context)userdata) { cleanup(); }
         };
-        width = 1280;
-        height = 720;
+        width = state.window.width;
+        height = state.window.height;
         user_data = *context;
         sample_count = 4;
         fullscreen = false;

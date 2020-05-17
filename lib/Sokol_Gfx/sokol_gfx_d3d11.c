@@ -4,19 +4,21 @@
 #define SOKOL_DEBUG
 #define SOKOL_NO_DEPRECATED
 
-typedef void (*assert_failed_func)(const char* expr, const char* file, int line);
+#include <stdlib.h>
 
-static assert_failed_func _assert_failed;
+typedef void* (*malloc_func)(size_t bytes);
+typedef void (*free_func)();
+typedef void (*assert_func)(const char* expr, const char* filename, int line_number);
 
-void set_assert_func(assert_failed_func func) {
-    _assert_failed = func;
-}
+static malloc_func _my_sg_MALLOC = 0;
+static free_func _my_sg_FREE = 0;
+static assert_func _my_sg_ASSERT = 0;
 
 #define SOKOL_ASSERT(expr) \
     if (expr) \
         {} \
-    else if (_assert_failed) \
-        _assert_failed(#expr, __FILE__, __LINE__); \
+    else if (_my_sg_ASSERT) \
+        _my_sg_ASSERT(#expr, __FILE__, __LINE__); \
     else { \
         fprintf( stderr, "sokol_gfx assert failed: '%s' in %s:%d", #expr, __FILE__, __LINE__); \
         abort(); \
@@ -28,17 +30,10 @@ void set_assert_func(assert_failed_func func) {
 #define SOKOL_MALLOC my_debug_MALLOC
 #define SOKOL_FREE   my_debug_FREE
 
-#include <stdlib.h>
-
-typedef void* (*malloc_func)(size_t bytes);
-typedef void (*free_func)();
-
-static malloc_func _my_sg_MALLOC = 0;
-static free_func _my_sg_FREE = 0;
-
-void sg_set_debug_funcs(malloc_func my_malloc, free_func my_free) {
+void sg_set_debug_funcs(malloc_func my_malloc, free_func my_free, assert_func my_assert) {
     _my_sg_MALLOC = my_malloc;
     _my_sg_FREE = my_free;
+    _my_sg_ASSERT = my_assert;
 }
 
 static void* my_debug_MALLOC(size_t bytes) {

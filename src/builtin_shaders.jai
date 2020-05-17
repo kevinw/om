@@ -11,7 +11,9 @@ color2d_v :: #string END
 END;
 
 color_f :: #string END
-    uniform vec4 color;
+    uniform fs_uniforms {
+        uniform vec4 color;
+    };
     out vec4 fragColor;
     void main() {
         fragColor = color;

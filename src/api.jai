@@ -4,6 +4,8 @@ window :: (title: string) -> *Window {
 
     win := new(Window);
     win.title = title;
+    win.width = 1280;
+    win.height = 720;
 
     state.window = win;
 
@@ -122,7 +124,20 @@ bind :: (values: ..Shader_Value_Entry) -> *Bind {
 
 _make_buffer :: (vec: []$V, type: Buffer_Type) -> Buffer {
     buf: Buffer;
-    buf.data = slice_to_bytes(vec);
+
+    buf.data.count = vec.count * size_of(V);
+    buf.data.data = alloc(buf.data.count);
+    memcpy(buf.data.data, cast(*u8)vec.data, buf.data.count);
+
+    //print("make buffer given % % and made a buffer with % bytes.\n", vec.count, V, buf.data.count);
+    //print("vals:\n");
+    //for vec print("% ", it);
+    //print("\n");
+
+    //print("bytes:\n");
+    //for buf.data print("% ", it);
+    //print("\n");
+
     buf.type = type;
     buf.pool_id = next_free_native_buffer_id();
     return buf;
@@ -224,6 +239,8 @@ shader :: (vert: string, frag: string) -> *Shader {
     if !ok {
         Log.error();
         Log.print("did not compile shader\n");
+        print_stack_trace(context.stack_trace);
+        exit(1);
     } else {
         shd.vert = native_vert;
         shd.frag = native_frag;
@@ -231,7 +248,6 @@ shader :: (vert: string, frag: string) -> *Shader {
 
     return shd;
 }
-
 
 draw :: (primitive: Primitive = Primitive.Triangles, elements: Buffer) -> *Draw {
     assert(elements.data.data == null ||
