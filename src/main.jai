@@ -23,17 +23,17 @@ example_rect :: () {
     );
 }
 
-_c_context: *Context;
+_c_context: Context;
 
 main :: () {
     Debug.init();
     GWP.init();
     context.allocator = GWP.allocator;
 
-    _c_context = *context;
+    _c_context = context;
 
     debug_calloc :: (num: int, size: int) -> *void #c_call {
-        push_context << _c_context {
+        push_context _c_context {
             ptr := alloc(num * size);
             memset(ptr, 0, num * size);
             return ptr;
@@ -41,25 +41,25 @@ main :: () {
     }
 
     debug_malloc :: (bytes: int) -> *void #c_call {
-        push_context << _c_context {
+        push_context _c_context {
             return alloc(bytes);
         }
     }
 
     debug_free :: (ptr: *void) #c_call {
-        push_context << _c_context {
+        push_context _c_context {
             free(ptr);
         }
     }
 
     debug_assert :: (expr: *u8, filename: *u8, line_number: s32) #c_call {
-        push_context << _c_context {
+        push_context _c_context {
             assert(false, tprint("expression: '%' at %:%", to_string(expr), to_string(filename), line_number));
         }
     }
 
     sapp_set_debug_funcs(debug_calloc, debug_free);
-    sg_set_debug_funcs(debug_malloc, debug_free, debug_assert);
+    sg_set_debug_funcs(/*debug_malloc*/null, /*debug_free*/null, debug_assert);
 
     /*
     sg_print_struct_sizes();
