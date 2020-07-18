@@ -63,6 +63,8 @@ END, vert, frag);
         Log.error();
         Log.print("Could not write to file %\n", filename);
         return false, "", "";
+    } else {
+        Log.print("wrote file %\n", filename);
     }
 
     cmdline := {:string: path_to_shdc,
@@ -77,6 +79,10 @@ END, vert, frag);
     File_win.file_delete("my_program_fs.hlsl.meta");
     File_win.file_delete("my_program_vs.hlsl");
     File_win.file_delete("my_program_vs.hlsl.meta");
+
+    for cmdline
+        Log.print("% ", it);
+    Log.print("\n");
 
     ok, exit_code, stdout, stderr := os_run_command(..cmdline, capture_and_return_output = true);
 
@@ -121,14 +127,18 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
     bytes, ok := File.read_entire_file(filename);
     if !ok {
         Log.error();
-        Log.print("could not read %", filename);
+        Log.print("could not read %\n", filename);
         return false;
     }
 
     buf := *bytes;
 
     // header and version
-    assert(read_bytes(buf, 4) == "SHDC");
+    if read_bytes(buf, 4) != "SHDC" {
+        msg := tprint("expected 'SHDC' bytes at the beginning of the file, got: %", buf);
+        assert(false, msg);
+    }
+
     assert(read(u16, buf) == 1);
 
     // shader stage

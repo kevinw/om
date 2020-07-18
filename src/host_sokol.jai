@@ -383,14 +383,12 @@ assert_no_null_bytes :: (s: string) {
     }
 }
 
-_ensure_shader_loaded :: (shader: *Shader) -> s32 {
+_ensure_shader_loaded :: (shader: *Shader) {
+    Log.print("_ensure_shader_loaded %\n", shader);
     assert(shader != null);
 
-
-    if shader_is_valid(shader.native_shader) {
-        // already loaded this shade.r
-        return 0xD0D0CACA;
-    }
+    if shader_is_valid(shader.native_shader)
+        return; // already loaded this shader
 
     // TODO: @Speed just allocate the original strings with null bytes!
     vert_shader_no_lines := strip_line_directives(shader.vert);
@@ -420,9 +418,7 @@ _ensure_shader_loaded :: (shader: *Shader) -> s32 {
     */
 
     assert(shader.native_shader.id == 0);
-    print("Before: %\n", shader.native_shader.id);
     shader.native_shader = sg_make_shader(*shader.desc);
-    print("After: %\n", shader.native_shader.id);
     assert(shader.native_shader.id != 0);
 
     state := sg_query_shader_state(shader.native_shader);
@@ -431,7 +427,7 @@ _ensure_shader_loaded :: (shader: *Shader) -> s32 {
         Log.print("shader creation failed %\n", state);
     }
 
-    return 0xD0D0CACA;
+    Log.print("now native_shader_id is %\n", shader.native_shader.id);
 }
 
 buffer_type_to_sg_vertex_format :: (buf_type: Buffer_Type) -> sg_vertex_format {
@@ -471,8 +467,7 @@ render_draw_node :: (draw_node: *Draw) {
         }
     }
     assert(state.current_program != null && state.current_program.shader != null);
-    debug_res := _ensure_shader_loaded(state.current_program.shader);
-    assert(debug_res == 0xD0D0CACA);
+    _ensure_shader_loaded(state.current_program.shader);
     using state.current_program.shader;
 
     current_bindings: sg_bindings;
