@@ -4,7 +4,7 @@
 // struct with a union of values for the types you specify.
 //
 Sum_Type :: struct (T: Type) {
-    #run_and_insert {
+    #insert #run () -> string {
         info := type_info(T);
 
         builder: String_Builder;
@@ -79,7 +79,7 @@ Sum_Type :: struct (T: Type) {
         print_to_builder(*builder, "    }\n");
 
         return builder_to_string(*builder);
-    }
+    }();
 }
 
 _sum_type_main :: () {
