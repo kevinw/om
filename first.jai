@@ -15,6 +15,7 @@ build :: () {
 
         array_add(*opts.modules_search_path_array, "lib");
         opts.output_type = Build_Output_Type.EXECUTABLE;
+        opts.stack_trace = true;
         set_build_options(opts, w);
         add_build_file("src/main.jai", w);
 
