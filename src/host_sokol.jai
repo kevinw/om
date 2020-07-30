@@ -384,7 +384,7 @@ assert_no_null_bytes :: (s: string) {
 }
 
 _ensure_shader_loaded :: (shader: *Shader) {
-    Log.print("_ensure_shader_loaded %\n", shader);
+    //Log.print("_ensure_shader_loaded %\n", shader);
     assert(shader != null);
 
     if shader_is_valid(shader.native_shader)
