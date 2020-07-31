@@ -1,4 +1,4 @@
-#if OS_WINDOWS {
+#if OS.WINDOWS {
     #foreign_system_library "d3d11";
     #foreign_system_library "dxguid";
     #foreign_system_library "user32";

@@ -1,4 +1,4 @@
-#if OS_WINDOWS {
+#if OS.WINDOWS {
     #foreign_system_library "d3d11";
     #foreign_system_library "dxguid";
     sg_lib :: #foreign_library,no_dll "win/sokol_gfx_d3d11";

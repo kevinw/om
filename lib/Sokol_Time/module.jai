@@ -1,4 +1,4 @@
-#if OS_WINDOWS {
+#if OS.WINDOWS {
     stm_lib :: #foreign_library,no_dll "win/sokol_time_d3d11";
 }
 
