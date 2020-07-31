@@ -220,11 +220,27 @@ render_children :: inline (using node: *Node) {
     for children render_node(it);
 }
 
+LOG_NODE_RENDERS :: false;
+
+debug_recursion_level: int = 0;
+
 // TODO: use an explicit stack instead of recursion
 render_node :: (node_base: *Node) {
-    if node_base.flags & Node_Flags.Hidden {
-        return;
+    if LOG_NODE_RENDERS {
+        for 0..debug_recursion_level-1
+                print(" ");
+            
+            s := node_base.name;
+            if node_base.tags.count > 0
+                s = node_base.tags[0];
+            print("Render '%'\n", s);
     }
+
+    debug_recursion_level += 1;
+    defer debug_recursion_level -= 1;
+
+    if node_base.flags & Node_Flags.Hidden
+        return;
 
     if node_base.type == {
         case Bind;
@@ -233,7 +249,9 @@ render_node :: (node_base: *Node) {
             bind_count := state.current_bind_values.count;
             defer state.current_bind_values.count = bind_count;
 
+            pre := state.current_bind_values.allocated;
             array_add(*state.current_bind_values, ..bind.values);
+            assert(pre == state.current_bind_values.allocated);
 
             render_children(node_base);
         case Draw;
@@ -242,22 +260,27 @@ render_node :: (node_base: *Node) {
                 return;
             }
             render_draw_node(cast(*Draw)node_base);
-            render_children(node_base);
+            render_children(node_base); // TODO: maybe draw nodes should warn if they have children?
+
         case Scale;
             scale_node := cast(*Scale)node_base;
 
             mv := get_bind_val_ptr("MV", Matrix4);
 
-            orig := << mv;
-            defer << mv = orig;
+            x := mv.v[0].x;
+            y := mv.v[1].y;
+            z := mv.v[2].z;
 
-            m := orig;
-            m.v[0].x *= scale_node.scale.x;
-            m.v[1].y *= scale_node.scale.y;
-            m.v[2].z *= scale_node.scale.z;
-            << mv = m;
+            mv.v[0].x *= scale_node.scale.x;
+            mv.v[1].y *= scale_node.scale.y;
+            mv.v[2].z *= scale_node.scale.z;
 
             render_children(node_base);
+
+            mv.v[0].x = x;
+            mv.v[1].y = y;
+            mv.v[2].z = z;
+
         case Rotate;
             rotate_node := cast(*Rotate)node_base;
 
@@ -271,6 +294,7 @@ render_node :: (node_base: *Node) {
             << mv = rotate(orig, rotation);
 
             render_children(node_base);
+
         case Translate;
             translate_node := cast(*Translate)node_base;
 
@@ -278,11 +302,12 @@ render_node :: (node_base: *Node) {
             orig := << mv;
             defer << mv = orig;
 
-            m := orig;
-            m.v[0].z += translate_node.offset.x;
-            m.v[1].z += translate_node.offset.y;
-            m.v[2].z += translate_node.offset.z;
-            << mv = m; // TODO: just write to the pointer
+            mv.v[0].z += translate_node.offset.x;
+            mv.v[1].z += translate_node.offset.y;
+            mv.v[2].z += translate_node.offset.z;
+
+            render_children(node_base);
+
         case Blend;
             blend_node := cast(*Blend)node_base;
 
@@ -312,9 +337,10 @@ render_node :: (node_base: *Node) {
             defer state.current_program = old_program;
             
             render_children(node_base);
-        case Group; render_children(node_base);
+
+        case Group;  render_children(node_base);
         case Sprite; render_children(node_base);
-        case Rect; render_children(node_base);
+        case Rect;   render_children(node_base);
         case Circle; render_children(node_base);
 
         case;
@@ -339,7 +365,7 @@ get_or_make_cached_pipeline :: (pipeline_desc: sg_pipeline_desc) -> sg_pipeline 
                             - size_of(*u8)  // we don't want to compare labels
                             - size_of(u32); // or the end canary
 
-        if memcmp(*it.desc, *pipeline_desc, bytes_to_compare) == 0
+        if 0 == memcmp(*it.desc, *pipeline_desc, bytes_to_compare)
             return it.pipeline;
     }
 
@@ -426,16 +452,14 @@ _ensure_shader_loaded :: (shader: *Shader) {
         Log.warning();
         Log.print("shader creation failed %\n", state);
     }
-
-    Log.print("now native_shader_id is %\n", shader.native_shader.id);
 }
 
 buffer_type_to_sg_vertex_format :: (buf_type: Buffer_Type) -> sg_vertex_format {
     if buf_type == {
-        case Buffer_Type.Float;   return .FLOAT;
-        case Buffer_Type.Vector2; return .FLOAT2;
-        case Buffer_Type.Vector3; return .FLOAT3;
-        case Buffer_Type.Vector4; return .FLOAT4;
+        case .Float;   return .FLOAT;
+        case .Vector2; return .FLOAT2;
+        case .Vector3; return .FLOAT3;
+        case .Vector4; return .FLOAT4;
         case;
             panic("TODO: implement buffer_type_to_sg_vertex_format for '%'\n", buf_type);
     }
@@ -623,6 +647,8 @@ init_cb :: () {
         memcpy(*val[0], *state.window.clear_color, size_of(Vector4));
     }
 
+    array_reserve(*state.current_bind_values, 20);
+
     // init default P (projection) and MV (model-view) matrices
     {
         mv: Shader_Value_Entry;
@@ -638,7 +664,6 @@ init_cb :: () {
         
         array_add(*state.current_bind_values, mv, p);
     }
-
 }
 
 get_win_projection :: () -> Matrix4 {
@@ -661,10 +686,10 @@ _ensure_buffer_created :: (using buf: *Buffer, index: bool = false) -> sg_buffer
         buffer_content: *void = null;
         if pool_entry.usage == Resource_Usage.Immutable {
             buffer_content = data.data;
-            print("buffer content: ");
-            for data
-                print("%02x ", it);
-            print("\n");
+            //print("buffer content: ");
+            //for data
+                //print("%02x ", it);
+            //print("\n");
         }
 
         {
@@ -724,6 +749,7 @@ cleanup :: () {
     sg_shutdown();
 }
 
+
 frame :: () {
     // update
     {
@@ -748,6 +774,7 @@ frame :: () {
             if win.scene
                 render_node(win.scene);
         }
+
         sg_commit();
 
         for i: 0..2
@@ -759,8 +786,10 @@ event :: (event: *sapp_event) {
     //print("% %\n", state.frame_count, <<event);
 }
 
+callback_context: Context;
+
 host_main :: () {
-    print("Hello, om!\n");
+    callback_context = context;
 
     // We provide #c_call functions to sokol, and use its "userdata" pointer
     // to get our Context through.
@@ -768,25 +797,24 @@ host_main :: () {
     {
         using app_desc;
         init_userdata_cb = (userdata: *void) #c_call {
-            push_context <<(cast(*Context)userdata) {  init_cb(); }
+            push_context callback_context { init_cb(); }
         };
         frame_userdata_cb = (userdata: *void) #c_call {
-            push_context <<(cast(*Context)userdata) {  frame(); }
+            push_context callback_context { frame(); }
         };
         event_userdata_cb = (e: *sapp_event, userdata: *void) #c_call {
-            push_context <<(cast(*Context)userdata) {  event(e); }
+            push_context callback_context { event(e); }
         };
         cleanup_userdata_cb = (userdata: *void) #c_call {
-            push_context <<(cast(*Context)userdata) { cleanup(); }
+            push_context callback_context { cleanup(); }
         };
         width = state.window.width;
         height = state.window.height;
-        user_data = *context;
+        user_data = *callback_context;
         sample_count = 4;
         fullscreen = false;
         high_dpi = true;
     }
-    sapp_run(*app_desc);
 
-    print("finished.\n");
+    sapp_run(*app_desc);
 }

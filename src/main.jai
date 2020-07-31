@@ -10,6 +10,13 @@ GWP :: #import "gwpasan";
 #load "geometry.jai";
 #load "images.jai";
 
+example_main :: () {
+    win := window();
+    win.scene = circle(.{0, 0}, 50, WHITE, 255);
+}
+
+//the problem is that MV is changing locations??
+
 example_rect :: () {
     win := window(title="A Rectangle");
     x1 := -50.0; y1 := -50.0;
@@ -25,10 +32,14 @@ example_rect :: () {
 
 _c_context: Context;
 
+DEBUG_STUFF_ENABLED :: true;
+
 main :: () {
-    Debug.init();
-    GWP.init();
-    context.allocator = GWP.allocator;
+    if DEBUG_STUFF_ENABLED {
+        Debug.init();
+        GWP.init();
+        context.allocator = GWP.allocator;
+    }
 
     _c_context = context;
 
@@ -73,6 +84,8 @@ main :: () {
     _init_colors();
     _init_blend_states();
 
-    example_rect();
+    example_main();
     host_main();
+
+    print("MAIN IS DONE.\n");
 }

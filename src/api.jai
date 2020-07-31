@@ -1,4 +1,4 @@
-window :: (title: string) -> *Window {
+window :: (title: string = "om") -> *Window {
     if state.window != null
         panic("You cannot create more than one window!");
 
@@ -79,6 +79,10 @@ set_angle :: (using rotate: *Rotate, angle_radians: float) -> *Rotate {
 
 // scale
 
+scale :: (scale_scalar: float) -> *Scale {
+    return scale(make_vector3(scale_scalar, scale_scalar, scale_scalar));
+}
+
 scale :: (scale_vec: Vector3) -> *Scale {
     scale_node := new_node_with_tag(Scale, "scale");
     scale_node.scale = scale_vec;
@@ -107,7 +111,7 @@ translate :: (offset_vec: Vector3) -> *Translate {
     return translate_node;
 }
 
-translate :: (x: float, y: float, z: float) -> *Translate {
+translate :: (x: float, y: float, z: float = 0) -> *Translate {
     return translate(make_vector3(x, y, z));
 }
 
@@ -190,6 +194,28 @@ U32_Elem_Array :: (u32s: ..u32) -> Buffer {
     return _make_buffer(u32s, Buffer_Type.U32_Elems);
 }
 
+circle :: (center: Vector2, radius: float, color: Vector4, sides: u16) -> *Circle {
+    node := new_node_with_tag(Circle, "circle");
+    node.color = color;
+
+    node.translate_node = translate(center.x, center.y);
+    node.scale_node = scale(radius);
+    node.bind_node = bind(
+        sv("vert", circle_verts(sides = sides)),
+        sv("color", color)
+    );
+
+    return cast(*Circle)chain(
+        node,
+        node.scale_node,
+        node.translate_node,
+        use_program(shader_color2d()),
+        blend(.Alpha),
+        node.bind_node,
+        draw(.Triangles, circle_indices(sides))
+    );
+}
+
 rect :: (x1: float, y1: float, x2: float, y2: float) -> *Rect {
     return rect(x1, y1, x2, y2, WHITE);
 }
@@ -206,7 +232,7 @@ rect :: (x1: float, y1: float, x2: float, y2: float, color: Vector4) -> *Rect {
         use_program(shader_color2d()),
         blend(Blend_Mode.Alpha),
         rect_node.bind_node,
-        draw(Primitive.Triangles, rect_indices()),
+        draw(.Triangles, rect_indices()),
     );
 }
 

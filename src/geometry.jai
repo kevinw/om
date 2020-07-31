@@ -68,10 +68,9 @@ circle_verts :: (sides: u16 = DEFAULT_CIRCLE_SIDES) -> Buffer {
     buf := Vec2_Array(..t);
 
     // TODO: this is gnarly...
-    array_reserve(*circle_verts, circle_verts.count + 1);
-    circle_verts[circle_verts.count].sides = sides;
-    circle_verts[circle_verts.count].buffer = buf;
-    circle_verts.count += 1;
+    array_resize(*circle_verts, circle_verts.count + 1);
+    circle_verts[circle_verts.count - 1].sides = sides;
+    circle_verts[circle_verts.count - 1].buffer = buf;
 
     return buf;
 }
@@ -89,9 +88,9 @@ circle_indices :: (sides: u16 = DEFAULT_CIRCLE_SIDES) -> Buffer {
         array_add(*t, cast(u16)1, cast(u16)s, cast(u16)((s - 1) % sides + 2));
 
     buf := U16_Elem_Array(..t);
-    array_reserve(*circle_indices, circle_indices.count + 1);
-    circle_indices[circle_indices.count].sides = sides;
-    circle_indices[circle_indices.count].buffer = buf;
+    array_resize(*circle_indices, circle_indices.count + 1);
+    circle_indices[circle_indices.count - 1].sides = sides;
+    circle_indices[circle_indices.count - 1].buffer = buf;
     circle_indices.count += 1;
     return buf;
 }
