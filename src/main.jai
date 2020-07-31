@@ -10,12 +10,10 @@ GWP :: #import "gwpasan";
 #load "geometry.jai";
 #load "images.jai";
 
-example_main :: () {
+example_circle :: () {
     win := window();
     win.scene = circle(.{0, 0}, 50, WHITE, 255);
 }
-
-//the problem is that MV is changing locations??
 
 example_rect :: () {
     win := window(title="A Rectangle");
@@ -29,6 +27,15 @@ example_rect :: () {
         draw(.Triangles, rect_indices()),
     );
 }
+
+example_rotate :: () {
+    window().scene = chain(
+        rotate(rad(45)),
+        rect(-100, -100, 100, 100),
+    );
+}
+
+example_main :: example_rotate;
 
 _c_context: Context;
 
@@ -52,15 +59,11 @@ main :: () {
     }
 
     debug_malloc :: (bytes: int) -> *void #c_call {
-        push_context _c_context {
-            return alloc(bytes);
-        }
+        push_context _c_context { return alloc(bytes); }
     }
 
     debug_free :: (ptr: *void) #c_call {
-        push_context _c_context {
-            free(ptr);
-        }
+        push_context _c_context { free(ptr); }
     }
 
     debug_assert :: (expr: *u8, filename: *u8, line_number: s32) #c_call {
@@ -70,7 +73,7 @@ main :: () {
     }
 
     sapp_set_debug_funcs(debug_calloc, debug_free);
-    sg_set_debug_funcs(/*debug_malloc*/null, /*debug_free*/null, debug_assert);
+    sg_set_debug_funcs(debug_malloc, debug_free, debug_assert);
 
     /*
     sg_print_struct_sizes();

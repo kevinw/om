@@ -12,6 +12,11 @@ window :: (title: string = "om") -> *Window {
     return win;
 }
 
+rad :: (deg: float) -> float {
+    pi_on_180 :: 0.017453292519943295;
+    return deg * pi_on_180;
+}
+
 delta_time :: () -> float { return state.delta_time; }
 
 set_hidden :: (using node: *Node, hidden: bool = true) -> *Node {
@@ -67,7 +72,7 @@ add_child :: (using parent_node: *Node, child: *Node) {
 
 rotate :: (angle_radians: float) -> *Rotate {
     rotate_node := new_node_with_tag(Rotate, "rotate");
-    rotate_node.axis = make_vector3(0, 0, 1);
+    rotate_node.axis = .{0, 0, 1};
     rotate_node.angle = angle_radians;
     return rotate_node;
 }
