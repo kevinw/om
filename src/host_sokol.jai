@@ -277,6 +277,7 @@ render_node :: (node_base: *Node) {
 
             render_children(node_base);
 
+            assert(mv == get_bind_val_ptr("MV", Matrix4));
             mv.v[0].x = x;
             mv.v[1].y = y;
             mv.v[2].z = z;
