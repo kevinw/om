@@ -63,8 +63,6 @@ END, vert, frag);
         Log.error();
         Log.print("Could not write to file %\n", filename);
         return false, "", "";
-    } else {
-        Log.print("wrote file %\n", filename);
     }
 
     cmdline := {:string: path_to_shdc,
