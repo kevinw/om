@@ -65,7 +65,7 @@ apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shad
         // put uniforms into a byte buffer
         byte_offset := 0;
         for uniform: block_desc.uniforms {
-            if uniform.type == sg_uniform_type.INVALID break; // sokol's 'end of uniforms' marker
+            if uniform.type == .INVALID break; // sokol's 'end of uniforms' marker
             if uniform.array_count > 1 panic("TODO: impl array_count: % % \n", uniform.array_count, to_string(uniform.name));
 
             uniform_name_str := to_string(uniform.name);
@@ -123,15 +123,14 @@ apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shad
 }
 
 size_of_uniform_type :: inline (uniform_type: sg_uniform_type) -> int {
-    using sg_uniform_type;
     if uniform_type == {
-        case FLOAT;  return size_of(float32);
-        case FLOAT2; return size_of(Vector2);
-        case FLOAT3; return size_of(Vector3);
-        case FLOAT4; return size_of(Vector4);
-        case MAT4;   return size_of(Matrix4);
+        case .FLOAT;  return size_of(float32);
+        case .FLOAT2; return size_of(Vector2);
+        case .FLOAT3; return size_of(Vector3);
+        case .FLOAT4; return size_of(Vector4);
+        case .MAT4;   return size_of(Matrix4);
         //case INT;    return size_of(s32);
-        case INVALID;
+        case .INVALID;
             panic("invalid size_of_uniform arg");
         case;
             panic("unimplemented size_of_uniform");
@@ -639,50 +638,6 @@ get_bind_val_ptr :: (name: string, $T: Type) -> *T {
     return null;
 }
 
-init_cb :: () {
-    // initialize sokol_gfx
-    desc: sg_desc;
-    {
-        using desc;
-		mtl_device                   = sapp_metal_get_device();
-		mtl_renderpass_descriptor_cb = sapp_metal_get_renderpass_descriptor;
-		mtl_drawable_cb              = sapp_metal_get_drawable;
-		d3d11_device                 = sapp_d3d11_get_device();
-		d3d11_device_context         = sapp_d3d11_get_device_context();
-		d3d11_render_target_view_cb  = sapp_d3d11_get_render_target_view;
-		d3d11_depth_stencil_view_cb  = sapp_d3d11_get_depth_stencil_view;
-    }
-    sg_setup(*desc);
-
-    // initialize sokol_time
-    stm_setup();
-
-    // setup initial clear color
-    {
-        using state.pass_action.colors[0];
-        action = sg_action.CLEAR;
-        memcpy(*val[0], *state.window.clear_color, size_of(Vector4));
-    }
-
-    array_reserve(*state.current_bind_values, 20);
-
-    // init default P (projection) and MV (model-view) matrices
-    {
-        mv: Shader_Value_Entry;
-        mv.name = "MV";
-        mv.value.set(*mv.value, matrix4_identity());
-
-        p: Shader_Value_Entry;
-        p.name = "P";
-
-        proj_mat := get_win_projection();
-        for proj_mat.floats assert(!isnan(it));
-        p.value.set(*p.value, proj_mat);
-        
-        array_add(*state.current_bind_values, mv, p);
-    }
-}
-
 get_win_projection :: () -> Matrix4 {
     assert(state.window.width > 0 && state.window.height > 0);
     w, h := cast(float)state.window.width, cast(float)state.window.height;
@@ -734,13 +689,13 @@ _ensure_buffer_created :: (using buf: *Buffer, index: bool = false) -> sg_buffer
 
 _get_sg_usage :: (usage: Resource_Usage) -> sg_usage {
     if usage == {
-        case Resource_Usage.Immutable; return sg_usage.IMMUTABLE;
-        case Resource_Usage.Dynamic;   return sg_usage.DYNAMIC;
-        case Resource_Usage.Stream;    return sg_usage.STREAM;
+        case .Immutable; return .IMMUTABLE;
+        case .Dynamic;   return .DYNAMIC;
+        case .Stream;    return .STREAM;
     }
 
     panic("unknown resource usage %", usage);
-    return sg_usage.IMMUTABLE;
+    return .IMMUTABLE;
 }
 
 
@@ -762,6 +717,44 @@ as_sg_image :: (val: *Image) -> (sg_image, bool) {
     return _ensure_image_created(val), true;
 }
 
+init_cb :: () {
+    // initialize sokol_gfx
+    desc: sg_desc;
+    {
+        using desc;
+		mtl_device                   = sapp_metal_get_device();
+		mtl_renderpass_descriptor_cb = sapp_metal_get_renderpass_descriptor;
+		mtl_drawable_cb              = sapp_metal_get_drawable;
+		d3d11_device                 = sapp_d3d11_get_device();
+		d3d11_device_context         = sapp_d3d11_get_device_context();
+		d3d11_render_target_view_cb  = sapp_d3d11_get_render_target_view;
+		d3d11_depth_stencil_view_cb  = sapp_d3d11_get_depth_stencil_view;
+    }
+    sg_setup(*desc);
+
+    stm_setup(); // initialize sokol_time
+
+    {
+        using state.pass_action.colors[0];
+        action = sg_action.CLEAR;
+        memcpy(*val[0], *state.window.clear_color, size_of(Vector4));
+    }
+
+    array_reserve(*state.current_bind_values, 20); // TODO: bugs will happen once we get past 20
+
+    // init default P (projection) and MV (model-view) matrices
+    {
+        mv: Shader_Value_Entry = .{name = "MV"};
+        mv.value.set(*mv.value, matrix4_identity());
+
+        p: Shader_Value_Entry = .{name = "P"};
+        p.value.set(*p.value, get_win_projection());
+        
+        array_add(*state.current_bind_values, mv, p);
+    }
+}
+
+
 cleanup :: () {
     sg_shutdown();
 }
@@ -777,6 +770,7 @@ frame :: () {
         frame_time = stm_sec(current_ticks);
         delta_time = cast(float)(frame_time - last_frame_time);
         frame_count += 1;
+
         // TODO: consider a "FixedUpdate" type loop (in addition?)
     }
 
@@ -794,13 +788,55 @@ frame :: () {
 
         sg_commit();
 
+    }
+
+    // post update
+    {
+        win := state.window;
         for i: 0..2
             win.mouse_button_state[i].last = win.mouse_button_state[i].current;
     }
 }
 
+program_index := 0;
+
+free_window :: (window: *Window) {
+    if window == null return;
+
+    // TODO: delete window scene nodes
+
+    if window.scene
+        delete_node(window.scene);
+}
+
+switch_program :: (delta: int) {
+    all_programs := get_all_programs();
+    if !all_programs.count return;
+
+    program_index = delta + program_index;
+
+    while program_index < 0 program_index += all_programs.count;
+    while program_index >= all_programs.count program_index -= all_programs.count;
+
+    new_program := all_programs[program_index];
+
+    if state.window {
+        free_window(state.window);
+        state.window = null;
+    }
+
+    new_program();
+}
+
 event :: (event: *sapp_event) {
     //print("% %\n", state.frame_count, <<event);
+
+    if event.type == .KEY_DOWN && !event.key_repeat {
+        if event.key_code == {
+            case .LEFT; switch_program(-1);
+            case .RIGHT; switch_program(1);
+        }
+    }
 }
 
 callback_context: Context;
@@ -813,21 +849,20 @@ host_main :: () {
     app_desc: sapp_desc;
     {
         using app_desc;
-        init_userdata_cb = (userdata: *void) #c_call {
+        init_cb = () #c_call {
             push_context callback_context { init_cb(); }
         };
-        frame_userdata_cb = (userdata: *void) #c_call {
+        frame_cb = () #c_call {
             push_context callback_context { frame(); }
         };
-        event_userdata_cb = (e: *sapp_event, userdata: *void) #c_call {
+        event_cb = (e: *sapp_event) #c_call {
             push_context callback_context { event(e); }
         };
-        cleanup_userdata_cb = (userdata: *void) #c_call {
+        cleanup_cb = () #c_call {
             push_context callback_context { cleanup(); }
         };
         width = state.window.width;
         height = state.window.height;
-        user_data = *callback_context;
         sample_count = 4;
         fullscreen = false;
         high_dpi = true;

@@ -338,6 +338,15 @@ sprite :: (img: Image) -> *Sprite {
     );
 }
 
+delete_node :: (node: *Node) {
+    // TODO: this will fail on recursion
+
+    for node.children
+        delete_node(it);
+
+    free(node);
+    
+}
 
 #scope_file //////////////////////////////////////////////////////////////////////////
 
@@ -353,6 +362,7 @@ new_node :: ($T: Type) -> *T {
     assert(node.children.count == 0);
     return node;
 }
+
 
 new_node_with_tag :: ($T: Type, tag: string) -> *T {
     node := new_node(T);

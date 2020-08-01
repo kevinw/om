@@ -43,6 +43,21 @@ example_rotate :: () {
     );
 }
 
+Func :: #type ();
+
+all_funcs: [..]();
+
+get_all_programs :: () -> []Func {
+    if all_funcs.count == 0
+        array_add(*all_funcs,
+            example_sprite,
+            example_circle,
+            example_rect,
+            example_rotate);
+
+    return all_funcs;
+}
+
 _c_context: Context;
 
 DEBUG_STUFF_ENABLED :: true;
