@@ -53,10 +53,7 @@ _make_image :: (w: u16, h: u16, _data: []u8, clone_data := true) -> Image {
 }
 
 apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shader_uniform_block_desc) {
-    if block_desc.size == 0 {
-        print("no uniforms for %\n", shader_stage);
-        return;
-    }
+    if block_desc.size == 0 return;
 
     using state.current_program.shader;
 
@@ -76,6 +73,7 @@ apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shad
             val := get_bind_val_ptr(uniform_name_str); // TODO: @Speed - this is strlen everytime....doh
             if val != null {
                 dst := *uniform_bytes[byte_offset];
+
                 using val.TagType;
                 if val.type == {
                     case _Vector3;
@@ -99,8 +97,8 @@ apply_uniforms :: (shader_stage: sg_shader_stage, slot: int, block_desc: sg_shad
                         buf := val.try_get_ptr(val, Buffer);
                         assert(buf != null, "Expected buffer");
                         memcpy(dst, buf.data.data, buf.data.count);
-                    case _Matrix4;
 
+                    case _Matrix4;
                         memcpy(dst, val, size_of(Matrix4));
 
                         result := cast(*Matrix4)dst;
@@ -254,11 +252,13 @@ render_node :: (node_base: *Node) {
             assert(pre == state.current_bind_values.allocated);
 
             render_children(node_base);
+            
         case Draw;
             if state.current_program == null {
                 Log.warning(); Log.print("Error: cannot draw, there is no active program.\n");
                 return;
             }
+
             render_draw_node(cast(*Draw)node_base);
             render_children(node_base); // TODO: maybe draw nodes should warn if they have children?
 
@@ -275,12 +275,14 @@ render_node :: (node_base: *Node) {
             mv.v[1].y *= scale_node.scale.y;
             mv.v[2].z *= scale_node.scale.z;
 
-            render_children(node_base);
+            defer {
+                assert(mv == get_bind_val_ptr("MV", Matrix4));
+                mv.v[0].x = x;
+                mv.v[1].y = y;
+                mv.v[2].z = z;
+            }
 
-            assert(mv == get_bind_val_ptr("MV", Matrix4));
-            mv.v[0].x = x;
-            mv.v[1].y = y;
-            mv.v[2].z = z;
+            render_children(node_base);
 
         case Rotate;
             rotate_node := cast(*Rotate)node_base;
@@ -317,6 +319,7 @@ render_node :: (node_base: *Node) {
             defer state.current_blend = old_blend;
 
             render_children(node_base);
+
         case Read_Uniform;
             read_uniform_node := cast(*Read_Uniform)node_base;
             uniform_name := read_uniform_node.uniform;
@@ -331,6 +334,7 @@ render_node :: (node_base: *Node) {
                 Log.warning();
                 Log.print("Read_Uniform node has no uniform name");
             }
+
         case Use_Program;
             old_program := state.current_program;
             state.current_program = cast(*Use_Program)node_base;
@@ -549,13 +553,21 @@ render_draw_node :: (draw_node: *Draw) {
         }
 
         // bind images
-        for * reflection_info.images {
-            sg_img, ok := get_current_bind_sg_image(it.name);
-            if !ok continue;
-            if it.shader_type == {
-                case Shader_Type.Vertex;   current_bindings.vs_images[it.binding] = sg_img;
-                case Shader_Type.Fragment; current_bindings.fs_images[it.binding] = sg_img;
-                case; panic("unknown shader type %\n", it.shader_type);
+        if reflection_info.images.count > 0 {
+            for * reflection_info.images {
+                sg_img, ok := get_current_bind_sg_image(it.name);
+
+                if !ok {
+                    Log.warning();
+                    Log.print("no image specified for '%'\n", it.name);
+                    continue;
+                }
+
+                if it.shader_type == {
+                    case .Vertex;   current_bindings.vs_images[it.binding] = sg_img;
+                    case .Fragment; current_bindings.fs_images[it.binding] = sg_img;
+                    case; panic("unknown shader type %\n", it.shader_type);
+                }
             }
         }
     }
@@ -569,8 +581,8 @@ render_draw_node :: (draw_node: *Draw) {
         // TODO: multiple uniform blocks
         // TODO: think about how to cache whether a set of uniforms is
         //       "dirty" or not.
-        apply_uniforms(sg_shader_stage.FS, 0, desc.fs.uniform_blocks[0]);
-        apply_uniforms(sg_shader_stage.VS, 0, desc.vs.uniform_blocks[0]);
+        apply_uniforms(.VS, 0, desc.vs.uniform_blocks[0]);
+        apply_uniforms(.FS, 0, desc.fs.uniform_blocks[0]);
     }
 
     if has_index_buffer && draw_node.index_buffer.pool_id != 0 {
@@ -578,13 +590,17 @@ render_draw_node :: (draw_node: *Draw) {
     }
 
     assert(num_elems > 0);
-    //print("applying bindings: %\n", current_bindings);
-    //print("vs_images:\n");
-    //for current_bindings.vs_images print("   %", it);
-    //print("\n");
-    //print("fs_images:\n");
-    //for current_bindings.fs_images print("   %", it);
-    //print("\n");
+
+    if verbose_mode() {
+        print("applying bindings: %\n", current_bindings);
+        print("vs_images:\n");
+        for current_bindings.vs_images print("   %", it);
+        print("\n");
+        print("fs_images:\n");
+        for current_bindings.fs_images print("   %", it);
+        print("\n");
+    }
+
     sg_apply_bindings(*current_bindings);
     sg_draw(0, cast(s32)num_elems, 1);
 }
@@ -681,7 +697,7 @@ _ensure_buffer_created :: (using buf: *Buffer, index: bool = false) -> sg_buffer
     assert(pool_entry.occupied == true);
 
     if pool_entry.sg_obj.id == 0 {
-        if verbose_mode() print("creating buffer for pool_id %\n", pool_id);
+        //if verbose_mode() print("creating buffer for pool_id %\n", pool_id);
         buf_desc: sg_buffer_desc;
 
         buffer_content: *void = null;
@@ -700,7 +716,7 @@ _ensure_buffer_created :: (using buf: *Buffer, index: bool = false) -> sg_buffer
             usage = _get_sg_usage(pool_entry.usage);
             content = buffer_content;
             label = "generated-buffer"; // TODO: better names would be nice
-            if verbose_mode() print("%", buf_desc);
+            //if verbose_mode() print("%", buf_desc);
         }
         pool_entry.sg_obj = sg_make_buffer(*buf_desc);
 

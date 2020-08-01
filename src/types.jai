@@ -1,13 +1,6 @@
 #load "Sum_Type.jai";
 
-WHITE: Vector4;
-
-_init_colors :: () {
-    WHITE.x = 1;
-    WHITE.y = 1;
-    WHITE.z = 1;
-    WHITE.w = 1;
-}
+WHITE: Vector4 = .{1, 1, 1, 1};
 
 Shader_Value :: Sum_Type(union {
     vec3: Vector3;

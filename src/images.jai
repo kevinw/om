@@ -1,11 +1,12 @@
 #import "Hash_Table";
+#import "stb_image";
 
 _image_cache: Table(string, Image);
 
 _get_cached_image_from_filename :: (filename: string) -> (Image, bool) {
     {
         img := table_find_pointer(_image_cache, filename);
-        if img.pool_id != 0
+        if img != null && img.pool_id != 0
             return <<img, true;
     }
 
@@ -20,19 +21,24 @@ _get_cached_image_from_filename :: (filename: string) -> (Image, bool) {
 }
 
 _make_image_from_filename :: (filename: string) -> (Image, bool) {
-    /*
-    desired_channels:i32 = 4;
-    width, height, channels_in_file: i32;
-    bytes := stbi.load(strings.clone_to_cstring(filename, context.temp_allocator), &width, &height, &channels_in_file, desired_channels);
-    if bytes == nil do return Image {}, false;
-    if verbose_mode() do
-        fmt.printf("loaded image %dx%dx%d from %s\n", width, height, channels_in_file, filename);
-    data := mem.slice_ptr(bytes, int(width * height * channels_in_file));
+    desired_channels:s32 = 4;
+    width, height, channels_in_file: s32;
+
+    c_name := to_c_string(filename);
+    defer free(c_name);
+
+    bytes := stbi_load(c_name, *width, *height, *channels_in_file, desired_channels);
+    if bytes == null
+        return .{}, false;
+    if verbose_mode()
+        print("loaded image w=% h=% channels=% from '%'\n", width, height, channels_in_file, filename);
+
+    data: []u8;
+    data.data = bytes;
+    data.count = width * height * channels_in_file;
+
     return _make_image(cast(u16)width, cast(u16)height, data, false), true;
-    */
-    panic("TODO: implement\n");
-    empty: Image;
-    return empty, false;
+
 }
 
 // TODO: global state

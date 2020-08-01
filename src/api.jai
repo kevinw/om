@@ -242,7 +242,7 @@ rect :: (x1: float, y1: float, x2: float, y2: float, color: Vector4) -> *Rect {
 }
 
 set_coords :: (using rect: *Rect, x1: float, y1: float, x2: float, y2: float) -> *Rect {
-    assert(false, "TODO: implement");
+    assert(false, "TODO: implement set_coords");
     return rect;
 }
 
@@ -295,7 +295,51 @@ draw :: (primitive: Primitive = Primitive.Triangles, elements: Buffer) -> *Draw 
     return draw_node;
 }
 
-#scope_file
+frame_time :: () -> float64 { return state.frame_time; }
+
+action :: (node: *Node, func: Action_Func) -> *Node {
+    return node;
+}
+
+sprite :: (ascii_sprite_or_filename: string) -> *Sprite {
+    // TODO: keep ascii sprites??
+    if String.contains(ascii_sprite_or_filename, "\n") {
+        assert(false, "TODO: implement ascii sprites");
+        //ascii_img := parse_ascii_sprite(ascii_sprite_or_filename);
+        //return sprite_from_image(ascii_img);
+    }
+
+    filename := ascii_sprite_or_filename;
+    img, ok := _get_cached_image_from_filename(filename);
+    if !ok {
+        print("could not load sprite from file: %\n", filename);
+        img = get_placeholder_image(.NORMALS);
+    }
+
+    return sprite(img);
+}
+
+sprite :: (img: Image) -> *Sprite {
+    W2 := cast(float)img.width * 0.5;
+    H2 := cast(float)img.height * 0.5;
+    x1, x2 := -W2, W2;
+    y1, y2 := -H2, H2;
+
+    return cast(*Sprite)chain(
+        new_node_with_tag(Sprite, "sprite"),
+        blend(.Alpha),
+        use_program(shader_texture2d()),
+        bind(
+            sv("vert", Vec2_Array(x2, y2, x2, y1, x1, y2, x1, y1)),
+            sv("uv", rect_sprite_uvs()),
+            sv("tex", img),
+        ),
+        draw(.Triangles, rect_indices())
+    );
+}
+
+
+#scope_file //////////////////////////////////////////////////////////////////////////
 
 new :: ($T: Type) -> *T {
     ptr := cast(*T)alloc(size_of(T));

@@ -72,11 +72,15 @@ END, vert, frag);
         "--output", "\"./\"",
     };
 
-    File_win :: #import "File/windows";
-    File_win.file_delete("my_program_fs.hlsl");
-    File_win.file_delete("my_program_fs.hlsl.meta");
-    File_win.file_delete("my_program_vs.hlsl");
-    File_win.file_delete("my_program_vs.hlsl.meta");
+    #if OS.WINDOWS {
+        File_win :: #import "File/windows";
+        File_win.file_delete("my_program_fs.hlsl");
+        File_win.file_delete("my_program_fs.hlsl.meta");
+        File_win.file_delete("my_program_vs.hlsl");
+        File_win.file_delete("my_program_vs.hlsl.meta");
+    } else {
+        assert(false, "TODO: implement file deletion for this platform.");
+    }
 
     for cmdline
         Log.print("% ", it);
@@ -113,7 +117,7 @@ END, vert, frag);
 }
 
 parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
-    //print("parsing shdc meta: %\n", filename);
+    Log.print("parsing shdc meta: %\n", filename);
 
     // in our shdc binary format, strings are encoded as (u16-len, bytes)
     read_string :: inline (s: *string) -> string {
@@ -141,16 +145,17 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
 
     // shader stage
     shader_stage := cast(Stage)read(u8, buf);
-    assert(shader_stage != Stage.INVALID);
-    assert(shader_stage == Stage.VS || shader_stage == Stage.FS);
+    assert(shader_stage != .INVALID);
+    assert(shader_stage == .VS || shader_stage == .FS);
 
     // entry point
     entry_name := to_c_string(read_string(buf)); // @Leak
     stage_desc: *sg_shader_stage_desc;
+
     // print("entry point: %\n", entry_point);
     if shader_stage == {
-        case Stage.VS; stage_desc = *shader.desc.vs;
-        case Stage.FS; stage_desc = *shader.desc.fs;
+        case .VS; stage_desc = *shader.desc.vs;
+        case .FS; stage_desc = *shader.desc.fs;
     }
     stage_desc.entry = entry_name;
 
@@ -167,9 +172,15 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
 
             // store name and location in the shader's reflection info
             using shader.reflection_info;
-            array_resize(*inputs, inputs.count + 1);
-            inputs[inputs.count - 1].name     = copy_string(name);
-            inputs[inputs.count - 1].location = location;
+
+            // We only keep input reflection info for the vertex shader, since
+            // those are the vertex buffers we actually need to bind at draw
+            // time.
+            if shader_stage == .VS {
+                array_resize(*inputs, inputs.count + 1);
+                inputs[inputs.count - 1].name     = copy_string(name);
+                inputs[inputs.count - 1].location = location;
+            }
         }
     }
     
@@ -204,7 +215,8 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
                 block.uniforms[j].name = to_c_string(read_string(buf));
                 block.uniforms[j].type = cast(sg_uniform_type)(read(u8, buf));
                 block.uniforms[j].array_count = read(u16, buf);
-                //print("member % % %\n", to_string(block.uniforms[j].name), block.uniforms[j].type, block.uniforms[j].array_count);
+                if verbose_mode()
+                    Log.print("uniform member '%' type=% array_count=%\n", to_string(block.uniforms[j].name), block.uniforms[j].type, block.uniforms[j].array_count);
                 unused_offset := read(u16, buf);
             }
             compute_uniform_block_size(block);
@@ -212,16 +224,37 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
     }
 
     // images
-    images: [..]sg_shader_image_desc;
     image_count := read(u16, buf);
-    // print("num images: %\n", image_count);
+    if verbose_mode() print("num images for '%': %\n", filename, image_count);
     if image_count > 0 {
-        array_resize(*images, image_count);
         for i: 0..image_count-1 {
-            images[i].name = to_c_string(read_string(buf));
-            unused_slot := read(u16, buf);
-            images[i].type = cast(sg_image_type)read(u8, buf);
+            name := read_string(buf);
+            name_cstring := to_c_string(name);
+
+            image_slot := read(u16, buf);
+            assert(image_slot == i); // is this correct? are these slots always sequential?
+
+            stage_desc.images[i].name = name_cstring;
+            stage_desc.images[i].type = cast(sg_image_type)read(u8, buf);
+
             unused_base_type := cast(sg_image_type)read(u8, buf);
+            if verbose_mode()
+                Log.print("  reflected image '%' at slot %\n", name, i);
+
+            shader_type: Shader_Type;
+            if shader_stage == {
+                case .VS; shader_type = .Vertex;
+                case .FS; shader_type = .Fragment;
+                case; panic("unimplemented shader type for image reflection");
+            }
+
+            array_resize(*shader.reflection_info.images,
+                shader.reflection_info.images.count + 1);
+            n := shader.reflection_info.images.count - 1;
+            img := *shader.reflection_info.images[n];
+            img.name = name; // this is pointing to the same allocated c string as above--is that what we want?
+            img.shader_type = shader_type;
+            img.binding = image_slot;
         }
     }
 
@@ -239,7 +272,7 @@ compute_uniform_block_size :: (uniform_block: *sg_shader_uniform_block_desc) {
     total_size:s32 = 0;
     for uniform_block.uniforms {
         using sg_uniform_type;
-        if it.type == INVALID break;
+        if it.type == INVALID break; // marker for the end.
         if it.type == {
             case FLOAT;  total_size += size_of(float);
             case FLOAT2; total_size += size_of(Vector2);

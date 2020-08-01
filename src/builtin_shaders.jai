@@ -23,7 +23,9 @@ END;
 texture2d_v :: #string END
     in vec2 vert;
     in vec2 uv;
-    uniform mat4 P, MV;
+    uniform vs_uniforms {
+        mat4 P, MV;
+    };
     out vec2 v_uv;
     void main() {
         v_uv = uv;

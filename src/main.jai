@@ -10,9 +10,17 @@ GWP :: #import "gwpasan";
 #load "geometry.jai";
 #load "images.jai";
 
+example_main :: example_sprite;
+
+example_sprite :: () {
+    window(title = "a sprite").scene = chain(
+        action(rotate(0.01), (r: *Node) { set_angle(cast(*Rotate)r, cast(float)frame_time() * 0.05); }),
+        sprite("examples/resources/owl.jpg"),
+    );
+}
+
 example_circle :: () {
-    win := window();
-    win.scene = circle(.{0, 0}, 50, WHITE, 255);
+    window().scene = circle(.{0, 0}, 50, WHITE, 255);
 }
 
 example_rect :: () {
@@ -34,8 +42,6 @@ example_rotate :: () {
         rect(-100, -100, 100, 100),
     );
 }
-
-example_main :: example_rotate;
 
 _c_context: Context;
 
@@ -84,7 +90,6 @@ main :: () {
     */
 
     // TODO: get jai to let us initialize globals with constant values
-    _init_colors();
     _init_blend_states();
 
     example_main();
