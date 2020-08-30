@@ -833,7 +833,7 @@ event :: (event: *sapp_event) {
 
     if event.type == .KEY_DOWN && !event.key_repeat {
         if event.key_code == {
-            case .LEFT; switch_program(-1);
+            case .LEFT;  switch_program(-1);
             case .RIGHT; switch_program(1);
         }
     }
@@ -843,9 +843,6 @@ callback_context: Context;
 
 host_main :: () {
     callback_context = context;
-
-    // We provide #c_call functions to sokol, and use its "userdata" pointer
-    // to get our Context through.
     app_desc: sapp_desc;
     {
         using app_desc;
