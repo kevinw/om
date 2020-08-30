@@ -65,12 +65,13 @@ END, vert, frag);
         return false, "", "";
     }
 
-    cmdline := {:string: path_to_shdc,
+    cmdline := string.[
+        path_to_shdc,
         "--input", filename,
         "--slang", "hlsl5",
         "--format", "bare",
         "--output", "\"./\"",
-    };
+    ];
 
     #if OS.WINDOWS {
         File_win :: #import "File/windows";
