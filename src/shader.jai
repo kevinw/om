@@ -60,8 +60,7 @@ END, vert, frag);
     filename :: "temp.shd";
 
     if !File.write_entire_file(filename, contents) {
-        Log.error();
-        Log.print("Could not write to file %\n", filename);
+        log_error("Could not write to file %", filename);
         return false, "", "";
     }
 
@@ -84,15 +83,13 @@ END, vert, frag);
     }
 
     for cmdline
-        Log.print("% ", it);
-    Log.print("\n");
+        log("% ", it);
 
     ok, exit_code, stdout, stderr := os_run_command(..cmdline, capture_and_return_output = true);
 
     if exit_code != 0 {
-        Log.error();
-        Log.print("sokol-shdc returned an error (%)\n", exit_code);
-        Log.print("%\n%\n", stdout, stderr);
+        log_error("sokol-shdc returned an error (%)", exit_code);
+        log_error("%\n%", stdout, stderr);
         return false, "", "";
     }
     
@@ -118,7 +115,7 @@ END, vert, frag);
 }
 
 parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
-    Log.print("parsing shdc meta: %\n", filename);
+    log("parsing shdc meta: %\n", filename);
 
     // in our shdc binary format, strings are encoded as (u16-len, bytes)
     read_string :: inline (s: *string) -> string {
@@ -129,8 +126,7 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
 
     bytes, ok := File.read_entire_file(filename);
     if !ok {
-        Log.error();
-        Log.print("could not read %\n", filename);
+        log("could not read %\n", filename);
         return false;
     }
 
@@ -217,7 +213,7 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
                 block.uniforms[j].type = cast(sg_uniform_type)(read(u8, buf));
                 block.uniforms[j].array_count = read(u16, buf);
                 if verbose_mode()
-                    Log.print("uniform member '%' type=% array_count=%\n", to_string(block.uniforms[j].name), block.uniforms[j].type, block.uniforms[j].array_count);
+                    log("uniform member '%' type=% array_count=%", to_string(block.uniforms[j].name), block.uniforms[j].type, block.uniforms[j].array_count);
                 unused_offset := read(u16, buf);
             }
             compute_uniform_block_size(block);
@@ -240,7 +236,7 @@ parse_shdc_meta_file :: (filename: string, shader: *Shader) -> bool {
 
             unused_base_type := cast(sg_image_type)read(u8, buf);
             if verbose_mode()
-                Log.print("  reflected image '%' at slot %\n", name, i);
+                log("  reflected image '%' at slot %", name, i);
 
             shader_type: Shader_Type;
             if shader_stage == {

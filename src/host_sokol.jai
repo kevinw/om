@@ -1,6 +1,5 @@
 #import "Basic";
 #import "Math";
-Log :: #import "Log";
 
 #import "Sokol_Gfx";
 #import "Sokol_App";
@@ -254,7 +253,7 @@ render_node :: (node_base: *Node) {
             
         case Draw;
             if state.current_program == null {
-                Log.warning(); Log.print("Error: cannot draw, there is no active program.\n");
+                log("Error: cannot draw, there is no active program.\n");
                 return;
             }
 
@@ -330,8 +329,7 @@ render_node :: (node_base: *Node) {
                     print("%: null\n", uniform_name);
                 }
             } else {
-                Log.warning();
-                Log.print("Read_Uniform node has no uniform name");
+                log("Read_Uniform node has no uniform name");
             }
 
         case Use_Program;
@@ -414,7 +412,7 @@ assert_no_null_bytes :: (s: string) {
 }
 
 _ensure_shader_loaded :: (shader: *Shader) {
-    //Log.print("_ensure_shader_loaded %\n", shader);
+    //log("_ensure_shader_loaded %\n", shader);
     assert(shader != null);
 
     if shader_is_valid(shader.native_shader)
@@ -453,8 +451,7 @@ _ensure_shader_loaded :: (shader: *Shader) {
 
     state := sg_query_shader_state(shader.native_shader);
     if state != sg_resource_state.VALID {
-        Log.warning();
-        Log.print("shader creation failed %\n", state);
+        log_error("shader creation failed %\n", state);
     }
 }
 
@@ -473,8 +470,7 @@ buffer_type_to_sg_vertex_format :: (buf_type: Buffer_Type) -> sg_vertex_format {
 
 render_draw_node :: (draw_node: *Draw) {
     if state.current_program == null || state.current_program.shader == null {
-        Log.warning();
-        Log.print("Not drawing because no shader is set");
+        log_error("Not drawing because no shader is set");
         return;
     }
 
@@ -557,8 +553,7 @@ render_draw_node :: (draw_node: *Draw) {
                 sg_img, ok := get_current_bind_sg_image(it.name);
 
                 if !ok {
-                    Log.warning();
-                    Log.print("no image specified for '%'\n", it.name);
+                    log_error("no image specified for '%'\n", it.name);
                     continue;
                 }
 

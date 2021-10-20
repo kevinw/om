@@ -268,8 +268,7 @@ shader :: (vert: string, frag: string) -> *Shader {
     ok, native_vert, native_frag := translate_glsl(vert, frag, shd);
 
     if !ok {
-        Log.error();
-        Log.print("did not compile shader\n");
+        log_error("did not compile shader");
         print_stack_trace(context.stack_trace);
         exit(1);
     } else {
